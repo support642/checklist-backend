@@ -75,15 +75,15 @@ app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 app.use(express.json());
 
 // ROUTES
-app.use("/api/logs", deviceRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/assign-task", assignTaskRoutes);
 app.use("/api/checklist", checklistRoutes);
+app.use("/api", delegationRoutes);
 app.use("/api/settings", settingRoutes);
 app.use("/api/staff-tasks", staffTasksRoutes);
 app.use("/api/tasks", quickTaskRoutes);
 app.use("/api/login", loginRoutes);
-app.use("/api", delegationRoutes);
+app.use("/api/logs", deviceRoutes);
 
 // SERVER RUN
 const PORT = process.env.PORT || 5000;
