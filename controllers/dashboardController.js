@@ -2,6 +2,15 @@ import pool from "../config/db.js";
 
 const today = new Date().toISOString().split("T")[0];
 
+// Helper function to get current month range
+const getCurrentMonthRange = () => {
+  const currentDate = new Date();
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
+  const currentDayStr = currentDate.toISOString().split('T')[0];
+  return { firstDayStr, currentDayStr };
+};
+
 export const getDashboardData = async (req, res) => {
   try {
     const {
@@ -12,11 +21,14 @@ export const getDashboardData = async (req, res) => {
       departmentFilter,
       role,
       username,
-      taskView = "recent"   // 👈 important
+      taskView = "recent"
     } = req.query;
 
     const table = dashboardType;
     const offset = (page - 1) * limit;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `SELECT * FROM ${table} WHERE 1=1`;
 
@@ -42,10 +54,28 @@ export const getDashboardData = async (req, res) => {
     }
 
     // ---------------------------
-    // TASK VIEW FILTERS
+    // IMPORTANT FIX: For "all" taskView, show ALL tasks in current month
+    // For specific views, show tasks within current month for that view
+    // ---------------------------
+    if (taskView === "all") {
+      // For "all" view: Show all tasks from 1st of month to current date
+      query += `
+        AND task_start_date >= '${firstDayStr} 00:00:00'
+        AND task_start_date <= '${currentDayStr} 23:59:59'
+      `;
+    } else {
+      // For specific views: Apply both current month AND specific date filters
+      query += `
+        AND task_start_date >= '${firstDayStr} 00:00:00'
+        AND task_start_date <= '${currentDayStr} 23:59:59'
+      `;
+    }
+
+    // ---------------------------
+    // TASK VIEW FILTERS (for specific views within current month)
     // ---------------------------
     if (taskView === "recent") {
-      // TODAY TASKS
+      // TODAY TASKS within current month
       query += `
         AND task_start_date >= CURRENT_DATE
         AND task_start_date < CURRENT_DATE + INTERVAL '1 day'
@@ -55,17 +85,15 @@ export const getDashboardData = async (req, res) => {
         query += ` AND (status IS NULL OR status <> 'yes')`;
       }
     }
-
     else if (taskView === "upcoming") {
-      // TOMORROW TASKS
+      // TOMORROW TASKS within current month
       query += `
         AND task_start_date >= CURRENT_DATE + INTERVAL '1 day'
         AND task_start_date < CURRENT_DATE + INTERVAL '2 day'
       `;
     }
-
     else if (taskView === "overdue") {
-      // PAST DUE + NOT COMPLETED
+      // PAST DUE + NOT COMPLETED within current month
       query += `
         AND task_start_date < CURRENT_DATE
       `;
@@ -75,14 +103,6 @@ export const getDashboardData = async (req, res) => {
       } else {
         query += ` AND submission_date IS NULL`;
       }
-    }
-
-    // ---------------------------
-    // DEFAULT OLD LOGIC (ALL TASKS TILL TODAY)
-    // when taskView == "all"
-    // ---------------------------
-    else {
-      query += ` AND task_start_date <= NOW()`;
     }
 
     // ORDER + PAGINATION
@@ -99,20 +119,20 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
-
-
-
-
 export const getTotalTask = async (req, res) => {
   try {
     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
 
     const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date <= NOW()
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
     `;
 
     // ROLE FILTER
@@ -138,19 +158,20 @@ export const getTotalTask = async (req, res) => {
   }
 };
 
-
-
-
 export const getCompletedTask = async (req, res) => {
   try {
     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
 
     const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date <= NOW()
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
     `;
 
     if (dashboardType === "checklist") {
@@ -172,22 +193,20 @@ export const getCompletedTask = async (req, res) => {
   }
 };
 
-
-
-
-
-
 export const getPendingTask = async (req, res) => {
   try {
-    console.log("Ram Rams");
     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
 
     const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date <= NOW()
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
       AND submission_date IS NULL
     `;
 
@@ -208,18 +227,20 @@ export const getPendingTask = async (req, res) => {
   }
 };
 
-
 export const getNotDoneTask = async (req, res) => {
-  console.log("🔥 getNotDoneTask HIT");
-
   try {
     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
     const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE status = 'no'
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
+      AND status = 'no'
       AND submission_date IS NOT NULL
     `;
 
@@ -235,10 +256,7 @@ export const getNotDoneTask = async (req, res) => {
       query += ` AND department = '${departmentFilter}'`;
     }
 
-    console.log("NOT DONE QUERY =>", query);
-
     const result = await pool.query(query);
-
     res.json(Number(result.rows[0].count || 0));
 
   } catch (err) {
@@ -247,22 +265,20 @@ export const getNotDoneTask = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
 export const getOverdueTask = async (req, res) => {
   try {
     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
 
     const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date <= NOW()
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
       AND task_start_date < NOW()
       AND submission_date IS NULL
     `;
@@ -284,124 +300,319 @@ export const getOverdueTask = async (req, res) => {
   }
 };
 
-
-
-
 export const getUniqueDepartments = async (req, res) => {
-  const result = await pool.query(`
-    SELECT DISTINCT department FROM users 
-    WHERE department IS NOT NULL AND department!=''
-  `);
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT department FROM users 
+      WHERE department IS NOT NULL AND department!=''
+    `);
 
-  res.json(result.rows.map(d => d.department));
+    res.json(result.rows.map(d => d.department));
+  } catch (err) {
+    console.error("DEPARTMENTS ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching departments" });
+  }
 };
-
-
 
 export const getStaffByDepartment = async (req, res) => {
-  const { department } = req.query;
+  try {
+    const { department } = req.query;
 
-  let query = `SELECT user_name, user_access FROM users`;
+    let query = `SELECT user_name, user_access FROM users`;
 
-  const result = await pool.query(query);
+    const result = await pool.query(query);
 
-  let staff = result.rows;
+    let staff = result.rows;
 
-  if (department && department !== "all") {
-    staff = staff.filter(u =>
-      u.user_access &&
-      u.user_access.toLowerCase().includes(department.toLowerCase())
-    );
+    if (department && department !== "all") {
+      staff = staff.filter(u =>
+        u.user_access &&
+        u.user_access.toLowerCase().includes(department.toLowerCase())
+      );
+    }
+
+    res.json(staff.map(s => s.user_name));
+  } catch (err) {
+    console.error("STAFF BY DEPARTMENT ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching staff by department" });
   }
-
-  res.json(staff.map(s => s.user_name));
 };
-
-
 
 export const getChecklistByDateRange = async (req, res) => {
-  const { startDate, endDate, staffFilter, departmentFilter } = req.query;
+  try {
+    const { startDate, endDate, staffFilter, departmentFilter } = req.query;
 
-  let query = `
-    SELECT * FROM checklist
-    WHERE task_start_date BETWEEN '${startDate} 00:00:00'
-    AND '${endDate} 23:59:59'
-  `;
+    // If no specific date range is provided, default to current month
+    let start = startDate;
+    let end = endDate;
+    
+    if (!startDate || !endDate) {
+      const { firstDayStr, currentDayStr } = getCurrentMonthRange();
+      start = firstDayStr;
+      end = currentDayStr;
+    }
 
-  if (staffFilter !== "all") {
-    query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+    let query = `
+      SELECT * FROM checklist
+      WHERE task_start_date BETWEEN '${start} 00:00:00'
+      AND '${end} 23:59:59'
+    `;
+
+    if (staffFilter !== "all") {
+      query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+    }
+
+    if (departmentFilter !== "all") {
+      query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+    }
+
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("CHECKLIST DATE RANGE ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching checklist by date range" });
   }
-
-  if (departmentFilter !== "all") {
-    query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
-  }
-
-  const result = await pool.query(query);
-  res.json(result.rows);
 };
-
-
-
 
 export const getChecklistStatsByDate = async (req, res) => {
-  const { startDate, endDate, staffFilter, departmentFilter } = req.query;
+  try {
+    const { startDate, endDate, staffFilter, departmentFilter } = req.query;
 
-  let query = `
-    SELECT * FROM checklist
-    WHERE task_start_date BETWEEN '${startDate} 00:00:00'
-    AND '${endDate} 23:59:59'
-  `;
+    // If no date range provided, default to current month
+    let start = startDate;
+    let end = endDate;
+    
+    if (!startDate || !endDate) {
+      const { firstDayStr, currentDayStr } = getCurrentMonthRange();
+      start = firstDayStr;
+      end = currentDayStr;
+    }
 
-  if (staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
-  if (departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+    let query = `
+      SELECT * FROM checklist
+      WHERE task_start_date BETWEEN '${start} 00:00:00'
+      AND '${end} 23:59:59'
+    `;
 
-  const result = await pool.query(query);
-  const data = result.rows;
+    if (staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+    if (departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
 
-  const totalTasks = data.length;
-  const completedTasks = data.filter(t => t.status === "Yes").length;
-  const overdueTasks = data.filter(t =>
-    (!t.status || t.status !== "Yes") &&
-    new Date(t.task_start_date) < new Date(today)
-  ).length;
-  const pendingTasks = totalTasks - completedTasks;
+    const result = await pool.query(query);
+    const data = result.rows;
 
-  res.json({
-    totalTasks,
-    completedTasks,
-    pendingTasks,
-    overdueTasks,
-    completionRate: totalTasks ? (completedTasks / totalTasks * 100).toFixed(1) : 0
-  });
+    const totalTasks = data.length;
+    const completedTasks = data.filter(t => t.status === "Yes").length;
+    const overdueTasks = data.filter(t =>
+      (!t.status || t.status !== "Yes") &&
+      new Date(t.task_start_date) < new Date(today)
+    ).length;
+    const pendingTasks = totalTasks - completedTasks;
+
+    res.json({
+      totalTasks,
+      completedTasks,
+      pendingTasks,
+      overdueTasks,
+      completionRate: totalTasks > 0 ? (completedTasks / totalTasks * 100).toFixed(1) : 0
+    });
+  } catch (err) {
+    console.error("CHECKLIST STATS ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching checklist stats" });
+  }
 };
-
-
 
 export const getStaffTaskSummary = async (req, res) => {
-  const { dashboardType } = req.query;
-  const table = dashboardType;
+  try {
+    const { dashboardType } = req.query;
+    const table = dashboardType;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
-  const query = `
-    SELECT name,
-      COUNT(*) AS total,
-      SUM(CASE WHEN submission_date IS NOT NULL OR status='Yes' THEN 1 ELSE 0 END) AS completed
-    FROM ${table}
-    WHERE task_start_date <= NOW()
-    GROUP BY name
-    ORDER BY name ASC
-  `;
+    const query = `
+      SELECT name,
+        COUNT(*) AS total,
+        SUM(
+          CASE 
+            WHEN submission_date IS NOT NULL THEN 1
+            WHEN status = 'Yes' THEN 1
+            ELSE 0 
+          END
+        ) AS completed
+      FROM ${table}
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
+      GROUP BY name
+      ORDER BY name ASC
+    `;
 
-  const result = await pool.query(query);
+    const result = await pool.query(query);
 
-  const formatted = result.rows.map(r => ({
-    id: r.name?.toLowerCase().replace(/\s+/g, "-"),
-    name: r.name,
-    email: `${r.name?.toLowerCase().replace(/\s+/g, ".")}@example.com`,
-    totalTasks: Number(r.total),
-    completedTasks: Number(r.completed),
-    pendingTasks: Number(r.total) - Number(r.completed),
-    progress: Math.round((Number(r.completed) / Number(r.total)) * 100)
-  }));
+    const formatted = result.rows.map(r => ({
+      id: r.name?.toLowerCase().replace(/\s+/g, "-"),
+      name: r.name,
+      email: `${r.name?.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+      totalTasks: Number(r.total),
+      completedTasks: Number(r.completed),
+      pendingTasks: Number(r.total) - Number(r.completed),
+      progress: Math.round((Number(r.completed) / Number(r.total)) * 100)
+    }));
 
-  res.json(formatted);
+    res.json(formatted);
+    
+  } catch (err) {
+    console.error("STAFF SUMMARY ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching staff task summary" });
+  }
 };
+
+export const getDashboardDataCount = async (req, res) => {
+  try {
+    const { 
+      dashboardType, 
+      staffFilter = "all", 
+      taskView = "recent", 
+      departmentFilter = "all" 
+    } = req.query;
+
+    const role = req.query.role;
+    const username = req.query.username;
+    
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
+
+    // Base query with current month filter
+    let query = `
+      SELECT COUNT(*) AS count
+      FROM ${dashboardType}
+      WHERE task_start_date >= '${firstDayStr} 00:00:00'
+      AND task_start_date <= '${currentDayStr} 23:59:59'
+    `;
+
+    // ROLE FILTER (USER)
+    if (role === "user" && username) {
+      query += ` AND LOWER(name) = LOWER('${username}')`;
+    }
+
+    // ADMIN STAFF FILTER
+    if (role === "admin" && staffFilter !== "all") {
+      query += ` AND LOWER(name) = LOWER('${staffFilter}')`;
+    }
+
+    // DEPARTMENT FILTER (checklist only)
+    if (dashboardType === "checklist" && departmentFilter !== "all") {
+      query += ` AND LOWER(department) = LOWER('${departmentFilter}')`;
+    }
+
+    // TASK VIEW LOGIC
+    if (taskView === "recent") {
+      query += `
+        AND task_start_date >= CURRENT_DATE
+        AND task_start_date < CURRENT_DATE + INTERVAL '1 day'
+      `;
+
+      if (dashboardType === "checklist") {
+        query += ` AND (status IS NULL OR status <> 'yes')`;
+      }
+    } 
+    else if (taskView === "upcoming") {
+      query += `
+        AND task_start_date >= CURRENT_DATE + INTERVAL '1 day'
+        AND task_start_date < CURRENT_DATE + INTERVAL '2 day'
+      `;
+    }
+    else if (taskView === "overdue") {
+      query += `
+        AND task_start_date < CURRENT_DATE
+        AND submission_date IS NULL
+      `;
+
+      if (dashboardType === "checklist") {
+        query += ` AND (status IS NULL OR status <> 'yes')`;
+      }
+    }
+
+    const result = await pool.query(query);
+    const count = Number(result.rows[0].count || 0);
+    
+    res.json(count);
+
+  } catch (err) {
+    console.error("DASHBOARD COUNT ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching dashboard count" });
+  }
+};
+
+export const getChecklistDateRangeCount = async (req, res) => {
+  try {
+    const { 
+      startDate, 
+      endDate, 
+      staffFilter = "all", 
+      departmentFilter = "all", 
+      statusFilter = "all" 
+    } = req.query;
+
+    const role = req.query.role;
+    const username = req.query.username;
+
+    // If no date range provided, default to current month
+    let start = startDate;
+    let end = endDate;
+    
+    if (!startDate || !endDate) {
+      const { firstDayStr, currentDayStr } = getCurrentMonthRange();
+      start = firstDayStr;
+      end = currentDayStr;
+    }
+
+    let query = `
+      SELECT COUNT(*) AS count
+      FROM checklist
+      WHERE task_start_date >= '${start} 00:00:00'
+      AND task_start_date <= '${end} 23:59:59'
+    `;
+
+    // ROLE FILTER (USER)
+    if (role === "user" && username) {
+      query += ` AND LOWER(name) = LOWER('${username}')`;
+    }
+
+    // ADMIN STAFF FILTER
+    if (role === "admin" && staffFilter !== "all") {
+      query += ` AND LOWER(name) = LOWER('${staffFilter}')`;
+    }
+
+    // DEPARTMENT FILTER
+    if (departmentFilter !== "all") {
+      query += ` AND LOWER(department) = LOWER('${departmentFilter}')`;
+    }
+
+    // STATUS FILTER
+    switch (statusFilter) {
+      case "completed":
+        query += ` AND status = 'Yes'`;
+        break;
+      case "pending":
+        query += ` AND (status IS NULL OR status <> 'Yes')`;
+        break;
+      case "overdue":
+        query += ` 
+          AND (status IS NULL OR status <> 'Yes')
+          AND submission_date IS NULL
+          AND task_start_date < CURRENT_DATE
+        `;
+        break;
+    }
+
+    const result = await pool.query(query);
+    const count = Number(result.rows[0].count || 0);
+    
+    res.json(count);
+
+  } catch (err) {
+    console.error("DATE RANGE COUNT ERROR:", err.message);
+    res.status(500).json({ error: "Error fetching date range count" });
+  }
+};
+

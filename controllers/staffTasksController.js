@@ -6,7 +6,8 @@ export const getStaffTasks = async (req, res) => {
       dashboardType = "checklist",
       staffFilter = "all",
       page = 1,
-      limit = 50
+      limit = 50,
+      monthYear = "" // Add this parameter
     } = req.query;
 
     const table = dashboardType;
@@ -15,14 +16,12 @@ export const getStaffTasks = async (req, res) => {
     let completedCondition = "";
 
     if (table === "checklist") {
-      // ENUM so no LOWER()
       completedCondition = "status = 'yes'";
     } else {
-      // TEXT so LOWER() allowed
       completedCondition = "LOWER(status) = 'yes'";
     }
 
-    // STEP 1 — Fetch unique names
+    // STEP 1 — Fetch unique names with month-year filter
     let staffQuery = `
       SELECT DISTINCT name 
       FROM ${table}
@@ -31,6 +30,15 @@ export const getStaffTasks = async (req, res) => {
       AND task_start_date IS NOT NULL
       AND task_start_date <= NOW()
     `;
+
+    // Add month-year filter if provided
+    if (monthYear) {
+      const [year, month] = monthYear.split('-').map(Number);
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
+      
+      staffQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
+    }
 
     if (staffFilter !== "all") {
       staffQuery += ` AND LOWER(name) = LOWER('${staffFilter}')`;
@@ -50,8 +58,8 @@ export const getStaffTasks = async (req, res) => {
     const finalData = [];
 
     for (let staffName of paginatedStaff) {
-
-      const taskQuery = `
+      // Get task data with timing calculation
+      let taskQuery = `
         SELECT 
           COUNT(*) AS total,
           SUM(
@@ -61,18 +69,53 @@ export const getStaffTasks = async (req, res) => {
                THEN 1 
                ELSE 0 
              END
-          ) AS completed
+          ) AS completed,
+          SUM(
+            CASE 
+              WHEN submission_date IS NOT NULL AND submission_date <= task_start_date
+              THEN 1 
+              WHEN submission_date IS NULL AND ${completedCondition} AND task_start_date <= NOW()
+              THEN 1
+              ELSE 0 
+            END
+          ) AS done_on_time,
+          AVG(
+            CASE 
+              WHEN submission_date IS NOT NULL AND submission_date > task_start_date
+              THEN EXTRACT(EPOCH FROM (submission_date - task_start_date)) / 86400.0 -- Delay in days
+              ELSE 0
+            END
+          ) AS avg_delay_days
         FROM ${table}
         WHERE LOWER(name)=LOWER('${staffName}')
         AND task_start_date IS NOT NULL
-        AND task_start_date <= NOW()
       `;
+
+      // Add month-year filter to task query if provided
+      if (monthYear) {
+        const [year, month] = monthYear.split('-').map(Number);
+        const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        
+        taskQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
+      } else {
+        taskQuery += ` AND task_start_date <= NOW()`;
+      }
 
       const taskResult = await pool.query(taskQuery);
       const total = Number(taskResult.rows[0].total);
       const completed = Number(taskResult.rows[0].completed);
+      const doneOnTime = Number(taskResult.rows[0].done_on_time) || 0;
+      const avgDelayDays = Number(taskResult.rows[0].avg_delay_days) || 0;
       const pending = total - completed;
-      const progress = total ? Math.round((completed / total) * 100) : 0;
+      
+      // Calculate on-time score as negative percentage
+      let onTimeScore = 0;
+      if (avgDelayDays > 0) {
+        onTimeScore = -Math.min(100, Math.round(avgDelayDays * 100));
+      } else if (completed > 0 && doneOnTime === completed) {
+        onTimeScore = 100;
+      }
 
       finalData.push({
         id: staffName.toLowerCase().replace(/\s+/g, "-"),
@@ -81,7 +124,8 @@ export const getStaffTasks = async (req, res) => {
         totalTasks: total,
         completedTasks: completed,
         pendingTasks: pending,
-        progress
+        doneOnTime: doneOnTime,
+        onTimeScore: onTimeScore
       });
     }
 
@@ -92,7 +136,6 @@ export const getStaffTasks = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
 
 
 

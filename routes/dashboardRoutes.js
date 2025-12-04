@@ -9,7 +9,10 @@ import {
   getStaffByDepartment,
   getChecklistByDateRange,
   getChecklistStatsByDate,
-  getNotDoneTask
+  getNotDoneTask,
+  getDashboardDataCount,
+  getChecklistDateRangeCount,
+  getStaffTaskSummary
 } from "../controllers/dashboardController.js";
 
 const router = express.Router();
@@ -27,9 +30,12 @@ router.get("/not-done", getNotDoneTask);
 // FILTER LISTS
 router.get("/departments", getUniqueDepartments);
 router.get("/staff", getStaffByDepartment);
+router.get("/staff-summary", getStaffTaskSummary);
 
 // DATE RANGE
 router.get("/checklist/date-range", getChecklistByDateRange);
 router.get("/checklist/date-range/stats", getChecklistStatsByDate);
+router.get("/checklist/date-range/count", getChecklistDateRangeCount);
+router.get("/count", getDashboardDataCount);
 
 export default router;

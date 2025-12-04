@@ -163,7 +163,61 @@ export const getDepartments = async (req, res) => {
 
 
 /*******************************
- * 6) CREATE DEPARTMENT
+ * 6) GET UNIQUE DEPARTMENTS ONLY
+ *******************************/
+export const getDepartmentsOnly = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT department
+      FROM users
+      WHERE department IS NOT NULL 
+        AND department <> ''
+      ORDER BY department ASC
+    `);
+
+    // Format the response
+    const departments = result.rows.map(row => ({
+      department: row.department
+    }));
+
+    res.json(departments);
+
+  } catch (error) {
+    console.error("❌ Error fetching unique departments:", error);
+    res.status(500).json({ error: "Database error" });
+  }
+};
+
+
+/*******************************
+ * 7) GET UNIQUE GIVEN_BY VALUES
+ *******************************/
+export const getGivenByData = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT given_by
+      FROM users
+      WHERE given_by IS NOT NULL 
+        AND given_by <> ''
+      ORDER BY given_by ASC
+    `);
+
+    // Format the response
+    const givenByList = result.rows.map(row => ({
+      given_by: row.given_by
+    }));
+
+    res.json(givenByList);
+
+  } catch (error) {
+    console.error("❌ Error fetching given_by data:", error);
+    res.status(500).json({ error: "Database error" });
+  }
+};
+
+
+/*******************************
+ * 8) CREATE DEPARTMENT
  *******************************/
 export const createDepartment = async (req, res) => {
   try {
@@ -185,7 +239,7 @@ export const createDepartment = async (req, res) => {
 
 
 /*******************************
- * 7) UPDATE DEPARTMENT
+ * 9) UPDATE DEPARTMENT
  *******************************/
 export const updateDepartment = async (req, res) => {
   try {
