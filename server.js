@@ -65,6 +65,9 @@ import staffTasksRoutes from "./routes/staffTasksRoutes.js";
 import quickTaskRoutes from "./routes/quickTaskRoutes.js";
 import loginRoutes from "./routes/loginRoutes.js";
 import deviceRoutes from "./routes/deviceRoutes.js";
+import calendarRoutes from "./routes/calendarRoutes.js";
+import holidayRoutes from "./routes/holidayRoutes.js";
+import workingDayRoutes from "./routes/workingDayRoutes.js";
 
 dotenv.config();
 
@@ -84,6 +87,9 @@ app.use("/api/staff-tasks", staffTasksRoutes);
 app.use("/api/tasks", quickTaskRoutes);
 app.use("/api/login", loginRoutes);
 app.use("/api/logs", deviceRoutes);
+app.use("/api/calendar", calendarRoutes);
+app.use("/api/holidays", holidayRoutes);
+app.use("/api/working-days", workingDayRoutes);
 
 // SERVER RUN
 const PORT = process.env.PORT || 5000;

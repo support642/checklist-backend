@@ -359,3 +359,30 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
 };
 
 
+/* ------------------------------------------------------
+   ADMIN DONE - Mark delegation as admin approved
+------------------------------------------------------ */
+export const adminDoneDelegation = async (req, res) => {
+  try {
+    const items = req.body;
+
+    if (!items || items.length === 0)
+      return res.status(400).json({ error: "No items provided" });
+
+    const sql = `
+      UPDATE delegation_done
+      SET admin_done = 'Done'
+      WHERE id = ANY($1::bigint[])
+    `;
+
+    const ids = items.map(i => i.id);
+
+    await pool.query(sql, [ids]);
+
+    res.json({ message: "Delegation admin approval updated successfully" });
+
+  } catch (err) {
+    console.error("❌ adminDoneDelegation Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};

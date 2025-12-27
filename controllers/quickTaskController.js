@@ -4,48 +4,41 @@ import pool from "../config/db.js";
 export const fetchChecklist = async (
   page = 0,
   pageSize = 50,
-  nameFilter = "",
-  startDate,
-  endDate
+  nameFilter = ""
 ) => {
   try {
     const offset = page * pageSize;
-    const filters = ["submission_date IS NULL"];
     const params = [];
     let paramIndex = 1;
 
-    const hasDateRange = startDate && endDate;
-    if (hasDateRange) {
-      filters.push(`task_start_date >= $${paramIndex++}`);
-      params.push(`${startDate} 00:00:00`);
-      filters.push(`task_start_date <= $${paramIndex++}`);
-      params.push(`${endDate} 23:59:59`);
-    } else {
-      filters.push("task_start_date::date = CURRENT_DATE");
-    }
+    let whereClause = "submission_date IS NULL";
 
     if (nameFilter) {
-      filters.push(`LOWER(name) = LOWER($${paramIndex++})`);
+      whereClause += ` AND LOWER(name) = LOWER($${paramIndex++})`;
       params.push(nameFilter);
     }
 
-    const whereClause = filters.join(" AND ");
-
+    // ⭐ DISTINCT ON ensures uniqueness based on (name + task_description)
     const dataQuery = `
-      SELECT *
+      SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
+        *
       FROM checklist
       WHERE ${whereClause}
-      ORDER BY task_start_date ASC
+      ORDER BY LOWER(name), LOWER(task_description), task_start_date ASC
       LIMIT $${paramIndex++}
       OFFSET $${paramIndex}
     `;
 
     const dataParams = [...params, pageSize, offset];
 
+    // Count unique rows
     const countQuery = `
-      SELECT COUNT(*) AS count
-      FROM checklist
-      WHERE ${whereClause}
+      SELECT COUNT(*) FROM (
+        SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
+          name, task_description
+        FROM checklist
+        WHERE ${whereClause}
+      ) AS unique_tasks
     `;
 
     const [dataRes, countRes] = await Promise.all([
@@ -54,12 +47,15 @@ export const fetchChecklist = async (
     ]);
 
     const total = parseInt(countRes.rows[0]?.count ?? 0, 10);
+
     return { data: dataRes.rows, total };
+
   } catch (err) {
     console.log(err);
     return { data: [], total: 0 };
   }
 };
+
 
 
 export const fetchDelegation = async (

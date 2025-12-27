@@ -33,7 +33,6 @@ export const createUser = async (req, res) => {
       phone,
       department,
       givenBy,
-      employee_id,
       role,
       status,
       user_access
@@ -42,15 +41,23 @@ export const createUser = async (req, res) => {
     const query = `
       INSERT INTO users (
         user_name, password, email_id, number, department,
-        given_by, role, status, user_access, employee_id
+        given_by, role, status, user_access
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *
     `;
 
+    // Convert empty strings to null for fields that might be bigint or optional
     const values = [
-      username, password, email, phone, department,
-      givenBy, role, status, user_access, employee_id
+      username || null,
+      password || null,
+      email || null,
+      phone || null,  // number column is bigint, empty string causes error
+      department || null,
+      givenBy || null,
+      role || 'employee',
+      status || 'active',
+      user_access || null
     ];
 
     const result = await pool.query(query, values);
