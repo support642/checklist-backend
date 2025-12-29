@@ -20,7 +20,10 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
         SELECT *
         FROM delegation
         WHERE name = '${username}'
-        AND (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
+        AND (
+          (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
+          OR (planned_date IS NOT NULL AND submission_date IS NULL)
+        )
         ORDER BY task_start_date ASC;
       `;
     }
@@ -30,7 +33,10 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
       query = `
         SELECT *
         FROM delegation
-        WHERE (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
+        WHERE (
+          (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
+          OR (planned_date IS NOT NULL AND submission_date IS NULL)
+        )
         ORDER BY task_start_date ASC;
       `;
     }
@@ -314,8 +320,8 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
       const updateQuery = `
         UPDATE delegation
         SET status = $1,
-            submission_date = NOW(),
-            updated_at = NOW(),
+            submission_date = date_trunc('second', NOW() AT TIME ZONE 'Asia/Kolkata'),
+            updated_at = NOW() AT TIME ZONE 'Asia/Kolkata',
             remarks = $2,
             planned_date = $3,
             image = $4
