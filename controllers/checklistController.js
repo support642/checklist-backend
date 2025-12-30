@@ -277,12 +277,11 @@ export const sendWhatsAppNotification = async (req, res) => {
       const appLink = 'https://checklist-frontend-eight.vercel.app';
 
       // Create urgent task alert message
-      const message = `🔔 *Shri Shyam Group*
-🚨 URGENT TASK ALERT 🚨
+      const message = `🚨 URGENT TASK ALERT 🚨
 
 Name: ${doerName}
 Task ID: ${item.task_id || 'N/A'}
-Task: ${item.task_description || 'N/A'}
+Task: ${item.task_description || 'N/A'}s
 Planned Date: ${formatDate(item.task_start_date)}
 Given By: ${item.given_by || 'N/A'}
 

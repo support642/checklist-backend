@@ -117,8 +117,8 @@ export const sendTaskAssignmentNotification = async (phoneNumber, taskDetails) =
   // Determine header based on frequency
   const isOneTime = frequency && frequency.toLowerCase() === 'onetime';
   const header = isOneTime 
-    ? '🔔 *Shri Shyam Group*\n*REMINDER: DELEGATION TASK*' 
-    : '🔔 *Shri Shyam Group*\n*REMINDER: CHECKLIST TASK*';
+    ? '🔔 REMINDER: DELEGATION TASK*' 
+    : '🔔 REMINDER: CHECKLIST TASK*';
   
   // App link for task completion
   const appLink = 'https://checklist-frontend-eight.vercel.app';
@@ -140,7 +140,7 @@ ${appLink}
 Please make sure the task is completed before the deadline. For any assistance, feel free to reach out.
 
 Best regards,
-Acemark Stationers.`;
+Shri Shyam Group.`;
 
   return await sendWhatsAppMessage(phoneNumber, message);
 };
