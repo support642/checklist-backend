@@ -153,6 +153,14 @@ export const deleteDelegationTasks = async (taskIds) => {
 
 export const updateChecklistTask = async (updatedTask, originalTask) => {
   try {
+    // Sanitize enum values to match database enum ('yes', 'no')
+    const sanitizedEnableReminder = updatedTask.enable_reminder 
+      ? updatedTask.enable_reminder.toLowerCase() 
+      : null;
+    const sanitizedRequireAttachment = updatedTask.require_attachment 
+      ? updatedTask.require_attachment.toLowerCase() 
+      : null;
+
     const sql = `
       UPDATE checklist
       SET 
@@ -175,8 +183,8 @@ export const updateChecklistTask = async (updatedTask, originalTask) => {
       updatedTask.given_by,
       updatedTask.name,
       updatedTask.task_description,
-      updatedTask.enable_reminder,
-      updatedTask.require_attachment,
+      sanitizedEnableReminder,
+      sanitizedRequireAttachment,
       updatedTask.remark,
 
       originalTask.department,

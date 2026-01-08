@@ -512,20 +512,23 @@ export const getStaffTaskSummary = async (req, res) => {
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
     const query = `
-      SELECT name,
+      SELECT 
+        t.name,
+        u.email_id,
         COUNT(*) AS total,
         SUM(
           CASE 
-            WHEN submission_date IS NOT NULL THEN 1
-            WHEN status = 'Yes' THEN 1
+            WHEN t.submission_date IS NOT NULL THEN 1
+            WHEN t.status = 'Yes' THEN 1
             ELSE 0 
           END
         ) AS completed
-      FROM ${table}
-      WHERE task_start_date >= '${firstDayStr} 00:00:00'
-      AND task_start_date <= '${currentDayStr} 23:59:59'
-      GROUP BY name
-      ORDER BY name ASC
+      FROM ${table} t
+      LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+      WHERE t.task_start_date >= '${firstDayStr} 00:00:00'
+      AND t.task_start_date <= '${currentDayStr} 23:59:59'
+      GROUP BY t.name, u.email_id
+      ORDER BY t.name ASC
     `;
 
     const result = await pool.query(query);
@@ -533,7 +536,7 @@ export const getStaffTaskSummary = async (req, res) => {
     const formatted = result.rows.map(r => ({
       id: r.name?.toLowerCase().replace(/\s+/g, "-"),
       name: r.name,
-      email: `${r.name?.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+      email: r.email_id || null, // Show null if no email found
       totalTasks: Number(r.total),
       completedTasks: Number(r.completed),
       pendingTasks: Number(r.total) - Number(r.completed),
