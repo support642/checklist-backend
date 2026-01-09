@@ -21,10 +21,11 @@ export const fetchChecklist = async (
     // ⭐ DISTINCT ON ensures uniqueness based on (name + task_description)
     const dataQuery = `
       SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
-        *
+        checklist.*,
+        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date
       FROM checklist
       WHERE ${whereClause}
-      ORDER BY LOWER(name), LOWER(task_description), task_start_date ASC
+      ORDER BY LOWER(name), LOWER(task_description), checklist.task_start_date ASC
       LIMIT $${paramIndex++}
       OFFSET $${paramIndex}
     `;
@@ -90,10 +91,12 @@ export const fetchDelegation = async (
     const whereClause = filters.join(" AND ");
 
     const dataQuery = `
-      SELECT *
+      SELECT 
+        delegation.*,
+        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date
       FROM delegation
       WHERE ${whereClause}
-      ORDER BY task_start_date ASC
+      ORDER BY delegation.task_start_date ASC
       LIMIT $${paramIndex++}
       OFFSET $${paramIndex}
     `;
