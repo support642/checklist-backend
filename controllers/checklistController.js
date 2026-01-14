@@ -40,7 +40,25 @@ export const getPendingChecklist = async (req, res) => {
     }
 
     const query = `
-      SELECT *,
+      SELECT 
+        task_id,
+        department,
+        given_by,
+        name,
+        task_description,
+        enable_reminder,
+        require_attachment,
+        frequency,
+        remark,
+        status,
+        image,
+        admin_done,
+        delay,
+        planned_date::text as planned_date,
+        created_at::text as created_at,
+        task_start_date::text as task_start_date,
+        submission_date::text as submission_date,
+        admin_done_remarks,
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}
@@ -129,7 +147,25 @@ export const getChecklistHistory = async (req, res) => {
     }
 
     const query = `
-      SELECT *,
+      SELECT 
+        task_id,
+        department,
+        given_by,
+        name,
+        task_description,
+        enable_reminder,
+        require_attachment,
+        frequency,
+        remark,
+        status,
+        image,
+        admin_done,
+        delay,
+        planned_date::text as planned_date,
+        created_at::text as created_at,
+        task_start_date::text as task_start_date,
+        submission_date::text as submission_date,
+        admin_done_remarks,
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}
