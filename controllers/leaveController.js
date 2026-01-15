@@ -94,4 +94,126 @@ const transferTasks = async (req, res) => {
   }
 };
 
-export { transferTasks };
+// Fetch user tasks by date range
+const getUserTasks = async (req, res) => {
+  const { username, startDate, endDate } = req.query;
+
+  if (!username || !startDate || !endDate) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required parameters: username, startDate, endDate"
+    });
+  }
+
+  try {
+    // Format dates for PostgreSQL
+    const formattedStartDate = `${startDate}T00:00:00`;
+    const formattedEndDate = `${endDate}T23:59:59`;
+
+    // Fetch checklist tasks in the date range
+    const fetchQuery = `
+      SELECT 
+        task_id, 
+        name, 
+        task_description, 
+        task_start_date, 
+        department, 
+        given_by, 
+        frequency,
+        planned_date
+      FROM checklist
+      WHERE name = $1
+      AND task_start_date >= $2
+      AND task_start_date <= $3
+      ORDER BY task_start_date ASC
+    `;
+    
+    const result = await pool.query(fetchQuery, [username, formattedStartDate, formattedEndDate]);
+
+    res.status(200).json({
+      success: true,
+      tasks: result.rows,
+      count: result.rows.length
+    });
+
+  } catch (error) {
+    console.error("Error fetching user tasks:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching user tasks",
+      error: error.message
+    });
+  }
+};
+
+// Assign individual tasks to different users
+const assignIndividualTasks = async (req, res) => {
+  const { assignments } = req.body;
+
+  if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing or invalid assignments array"
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Insert each task into delegation table with individual doer
+    const insertPromises = assignments.map(task => {
+      const insertQuery = `
+        INSERT INTO delegation (
+          task_id, task_description, given_by, name, 
+          created_at, status, department, frequency,
+          task_start_date, planned_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `;
+      return client.query(insertQuery, [
+        task.task_id,
+        task.task_description,
+        task.username, // The original doer (user on leave)
+        task.delegateTo, // The new doer assigned to this specific task
+        task.task_start_date, // Use task start date as created_at
+        'pending',
+        task.department || '',
+        task.frequency || '',
+        task.task_start_date,
+        task.planned_date
+      ]);
+    });
+
+    await Promise.all(insertPromises);
+
+    // Delete original checklist tasks using task_ids
+    const taskIds = assignments.map(t => t.task_id);
+    const deleteQuery = `
+      DELETE FROM checklist
+      WHERE task_id = ANY($1)
+    `;
+    await client.query(deleteQuery, [taskIds]);
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      tasksTransferred: assignments.length,
+      message: `Successfully transferred ${assignments.length} tasks with individual assignments`
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Error assigning individual tasks:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error assigning individual tasks",
+      error: error.message
+    });
+  } finally {
+    client.release();
+  }
+};
+
+export { transferTasks, getUserTasks, assignIndividualTasks };
