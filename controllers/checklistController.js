@@ -9,7 +9,7 @@ export const getPendingChecklist = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const username = req.query.username;
     const role = req.query.role;
-    const search = req.query.search || '';
+    const search = req.query.search || "";
 
     const limit = 50;
     const offset = (page - 1) * limit;
@@ -20,7 +20,6 @@ export const getPendingChecklist = async (req, res) => {
   submission_date IS NULL
   AND DATE(task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
 `;
-
 
     // ⭐ If user is NOT admin → filter by name
     if (role !== "admin" && role !== "super_admin" && username) {
@@ -73,14 +72,13 @@ export const getPendingChecklist = async (req, res) => {
     res.json({
       data: rows,
       page,
-      totalCount
+      totalCount,
     });
   } catch (error) {
     console.error("❌ Error fetching pending checklist:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
 
 // -----------------------------------------
 // 1.1️⃣ DELETE CHECKLIST RANGE (For Leave)
@@ -106,15 +104,18 @@ export const deleteChecklistInRange = async (req, res) => {
       RETURNING *
     `;
 
-    const { rows } = await client.query(deleteQuery, [username, startDate, endDate]);
+    const { rows } = await client.query(deleteQuery, [
+      username,
+      startDate,
+      endDate,
+    ]);
 
     await client.query("COMMIT");
 
     res.json({
       message: `Deleted ${rows.length} tasks for ${username}`,
-      deletedCount: rows.length
+      deletedCount: rows.length,
     });
-
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("❌ Error deleting checklist range:", error);
@@ -123,9 +124,6 @@ export const deleteChecklistInRange = async (req, res) => {
     client.release();
   }
 };
-
-
-
 
 // -----------------------------------------
 // 2️⃣ GET HISTORY CHECKLIST
@@ -180,15 +178,13 @@ export const getChecklistHistory = async (req, res) => {
     res.json({
       data: rows,
       page,
-      totalCount
+      totalCount,
     });
   } catch (error) {
     console.error("❌ Error fetching history:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
-
-
 
 // -----------------------------------------
 // 3️⃣ UPDATE CHECKLIST (User Submit)
@@ -243,7 +239,7 @@ export const updateChecklist = async (req, res) => {
           SET 
            status = $1,
             remark = $2,
-            submission_date = NOW(),
+            submission_date = date_trunc('second', NOW() AT TIME ZONE 'Asia/Kolkata'),
             image = $3
           WHERE task_id = $4
         `;
@@ -269,8 +265,6 @@ export const updateChecklist = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
 
 // -----------------------------------------
 // 4️⃣ ADMIN DONE UPDATE
@@ -300,7 +294,6 @@ export const adminDoneChecklist = async (req, res) => {
     await client.query("COMMIT");
 
     res.json({ message: "Admin updated successfully" });
-
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ adminDoneChecklist Error:", err);
@@ -309,7 +302,6 @@ export const adminDoneChecklist = async (req, res) => {
     client.release();
   }
 };
-
 
 // -----------------------------------------
 // 5️⃣ SEND WHATSAPP NOTIFICATION (Admin Only)
@@ -326,18 +318,18 @@ export const sendWhatsAppNotification = async (req, res) => {
 
     for (const item of items) {
       const doerName = item.name;
-      
+
       // Look up doer's phone number from users table
       const userResult = await pool.query(
-        'SELECT number FROM users WHERE user_name = $1',
-        [doerName]
+        "SELECT number FROM users WHERE user_name = $1",
+        [doerName],
       );
 
       if (userResult.rows.length === 0 || !userResult.rows[0].number) {
         results.push({
           name: doerName,
           success: false,
-          error: 'Phone number not found'
+          error: "Phone number not found",
         });
         continue;
       }
@@ -346,16 +338,16 @@ export const sendWhatsAppNotification = async (req, res) => {
 
       // Format date for message
       const formatDate = (dateStr) => {
-        if (!dateStr) return 'N/A';
+        if (!dateStr) return "N/A";
         try {
           const date = new Date(dateStr);
           if (isNaN(date.getTime())) return dateStr;
           const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const day = String(date.getDate()).padStart(2, "0");
+          const hours = String(date.getHours()).padStart(2, "0");
+          const minutes = String(date.getMinutes()).padStart(2, "0");
+          const seconds = String(date.getSeconds()).padStart(2, "0");
           return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         } catch (e) {
           return dateStr;
@@ -363,16 +355,16 @@ export const sendWhatsAppNotification = async (req, res) => {
       };
 
       // App link
-      const appLink = 'https://checklist-frontend-eight.vercel.app';
+      const appLink = "https://checklist-frontend-eight.vercel.app";
 
       // Create urgent task alert message
       const message = `🚨 URGENT TASK ALERT 🚨
 
 Name: ${doerName}
-Task ID: ${item.task_id || 'N/A'}
-Task: ${item.task_description || 'N/A'}s
+Task ID: ${item.task_id || "N/A"}
+Task: ${item.task_description || "N/A"}s
 Planned Date: ${formatDate(item.task_start_date)}
-Given By: ${item.given_by || 'N/A'}
+Given By: ${item.given_by || "N/A"}
 
 📌 Please take immediate action and update once completed.
 
@@ -385,18 +377,17 @@ ${appLink}`;
       results.push({
         name: doerName,
         success: result.success,
-        error: result.error || null
+        error: result.error || null,
       });
     }
 
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.filter((r) => !r.success).length;
 
     res.json({
       message: `WhatsApp sent: ${successCount} success, ${failCount} failed`,
-      results
+      results,
     });
-
   } catch (err) {
     console.error("❌ sendWhatsAppNotification Error:", err);
     res.status(500).json({ error: err.message });
