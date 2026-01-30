@@ -145,5 +145,32 @@ Shri Shyam Group.`;
   return await sendWhatsAppMessage(phoneNumber, message);
 };
 
-export default { sendWhatsAppMessage, sendTaskAssignmentNotification };
+/**
+ * Send delegation task extension notification to specific admin number
+ * @param {object} taskDetails - Details of the extended task
+ */
+export const sendDelegationExtensionNotification = async (taskDetails) => {
+  const { name, task_id, task_description, next_extend_date, reason } = taskDetails;
+  
+  const adminNumber = '9637655555';
+  
+  const message = `📋 *DELEGATION TASK EXTENDED*
+
+Name: ${name || 'N/A'}
+Task ID: ${task_id || 'N/A'}
+Description: ${task_description || 'N/A'}
+Extend Date: ${formatDate(next_extend_date)}
+Remarks: ${reason || 'N/A'}
+
+📌 *Status:* This is an extended delegation task.`;
+
+  console.log(`📡 Preparing extension notification for ${adminNumber}`);
+  console.log(`💬 Message: ${message}`);
+
+  const result = await sendWhatsAppMessage(adminNumber, message);
+  console.log(`📊 Notification result for ${adminNumber}:`, result);
+  return result;
+};
+
+export default { sendWhatsAppMessage, sendTaskAssignmentNotification, sendDelegationExtensionNotification };
 

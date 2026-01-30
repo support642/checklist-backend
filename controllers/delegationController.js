@@ -1,6 +1,6 @@
 import pool from "../config/db.js";
 import { uploadToS3 } from "../middleware/s3Upload.js";
-import { sendWhatsAppMessage } from "../services/whatsappService.js";
+import { sendWhatsAppMessage, sendDelegationExtensionNotification } from "../services/whatsappService.js";
 
 
 /* ------------------------------------------------------
@@ -346,6 +346,17 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
         saved_to_done_table: inserted.rows[0],
         updated_in_main_table: updated.rows[0],
       });
+
+      // Special Notification for Extension (only if remarks are filled)
+      if (task.status === "extend" && task.reason && task.reason.trim() !== "") {
+        try {
+          console.log(`📲 Sending WhatsApp extension notification for Task ID: ${task.task_id}`);
+          await sendDelegationExtensionNotification(task);
+        } catch (notifErr) {
+          console.error("❌ Notification error:", notifErr);
+          // Don't fail the whole transaction if notification fails
+        }
+      }
     }
 
     /* -----------------------------------------
