@@ -293,8 +293,8 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
 
       const insertQuery = `
         INSERT INTO delegation_done
-        (task_id, status, next_extend_date, reason, image_url, name, task_description, given_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        (task_id, status, next_extend_date, reason, image_url, name, task_description, given_by, department, task_start_date, planned_date)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         RETURNING *;
       `;
 
@@ -306,7 +306,10 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
         finalImageUrl,
         task.name,
         task.task_description,
-        task.given_by
+        task.given_by,
+        task.department,
+        task.task_start_date,
+        task.planned_date
       ];
 
       console.log("💾 INSERT delegation_done:", insertValues);
