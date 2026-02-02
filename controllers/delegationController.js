@@ -88,7 +88,7 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
       `;
     }
 
-    // ADMIN FILTER — ONLY IF YOU ADD department COLUMN IN delegation_done
+    // ADMIN FILTER — Fetch based on user_access departments
     if ((role === "admin" || role === "super_admin") && userAccess) {
       const depts = userAccess
         .replace(/\+/g, " ")
@@ -96,11 +96,12 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         .map((d) => `'${d.trim().toLowerCase()}'`)
         .join(",");
 
-      // Check if department column exists
       query = `
-        SELECT *
-        FROM delegation_done
-        ORDER BY created_at DESC;
+        SELECT dd.*
+        FROM delegation_done dd
+        LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
+        WHERE LOWER(d.department) IN (${depts})
+        ORDER BY dd.created_at DESC;
       `;
     }
 
@@ -293,8 +294,8 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
 
       const insertQuery = `
         INSERT INTO delegation_done
-        (task_id, status, next_extend_date, reason, image_url, name, task_description, given_by, department, task_start_date, planned_date)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (task_id, status, next_extend_date, reason, image_url, name, task_description, given_by)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         RETURNING *;
       `;
 
@@ -306,10 +307,7 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
         finalImageUrl,
         task.name,
         task.task_description,
-        task.given_by,
-        task.department,
-        task.task_start_date,
-        task.planned_date
+        task.given_by
       ];
 
       console.log("💾 INSERT delegation_done:", insertValues);
