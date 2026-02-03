@@ -18,7 +18,25 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
     // USER: only own pending
     if (role === "user") {
       query = `
-        SELECT *
+        SELECT 
+          task_id,
+          department,
+          given_by,
+          name,
+          task_description,
+          frequency,
+          enable_reminder,
+          require_attachment,
+          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+          status,
+          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
+          image,
+          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+          remarks,
+          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
+          color_code_for,
+          delay
         FROM delegation
         WHERE name = '${username}'
         AND (
@@ -32,7 +50,25 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
     // ADMIN: fetch ALL pending tasks (ignore user_access)
     else if (role === "admin" || role === "super_admin") {
       query = `
-        SELECT *
+        SELECT 
+          task_id,
+          department,
+          given_by,
+          name,
+          task_description,
+          frequency,
+          enable_reminder,
+          require_attachment,
+          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+          status,
+          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
+          image,
+          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+          remarks,
+          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
+          color_code_for,
+          delay
         FROM delegation
         WHERE (
           (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
@@ -45,7 +81,25 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
     // NO ROLE (fallback)
     else {
       query = `
-        SELECT *
+        SELECT 
+          task_id,
+          department,
+          given_by,
+          name,
+          task_description,
+          frequency,
+          enable_reminder,
+          require_attachment,
+          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+          status,
+          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
+          image,
+          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+          remarks,
+          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
+          color_code_for,
+          delay
         FROM delegation
         ORDER BY task_start_date ASC;
       `;
@@ -73,7 +127,21 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
 
   try {
     let query = `
-      SELECT dd.*, d.planned_date, d.submission_date
+      SELECT 
+        dd.id,
+        dd.task_id,
+        dd.status,
+        to_char(dd.next_extend_date, 'YYYY-MM-DD HH24:MI:SS') as next_extend_date,
+        dd.reason,
+        dd.image_url,
+        dd.name,
+        dd.task_description,
+        dd.given_by,
+        to_char(dd.created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+        dd.admin_done,
+        dd.admin_done_remarks,
+        to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+        to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
       FROM delegation_done dd
       LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
       ORDER BY dd.created_at DESC;
@@ -82,7 +150,21 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
     // USER LEVEL FILTER
     if (role === "user") {
       query = `
-        SELECT dd.*, d.planned_date, d.submission_date
+        SELECT 
+          dd.id,
+          dd.task_id,
+          dd.status,
+          to_char(dd.next_extend_date, 'YYYY-MM-DD HH24:MI:SS') as next_extend_date,
+          dd.reason,
+          dd.image_url,
+          dd.name,
+          dd.task_description,
+          dd.given_by,
+          to_char(dd.created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+          dd.admin_done,
+          dd.admin_done_remarks,
+          to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE dd.name = '${username}'
@@ -99,7 +181,21 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         .join(",");
 
       query = `
-        SELECT dd.*, d.planned_date, d.submission_date
+        SELECT 
+          dd.id,
+          dd.task_id,
+          dd.status,
+          to_char(dd.next_extend_date, 'YYYY-MM-DD HH24:MI:SS') as next_extend_date,
+          dd.reason,
+          dd.image_url,
+          dd.name,
+          dd.task_description,
+          dd.given_by,
+          to_char(dd.created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+          dd.admin_done,
+          dd.admin_done_remarks,
+          to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE LOWER(d.department) IN (${depts})

@@ -122,9 +122,9 @@ export const postAssignTasks = async (req, res) => {
           t.frequency,
           t.enableReminders ? "yes" : "no",
           t.requireAttachment ? "yes" : "no",
-          null,
-          null,
-          t.dueDate,
+          t.dueDate,           // planned_date (the selected end/due date)
+          null,                // status
+          new Date().toISOString().slice(0, 19).replace('T', ' '),  // task_start_date (current timestamp)
           imageUrl            // <-- NEW
         );
       });
