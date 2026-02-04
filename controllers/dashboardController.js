@@ -34,27 +34,50 @@ export const getDashboardData = async (req, res) => {
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
-    let query = `SELECT * FROM ${table} WHERE 1=1`;
+    let query = `
+      SELECT 
+        task_id,
+        department,
+        given_by,
+        name,
+        task_description,
+        enable_reminder,
+        require_attachment,
+        frequency,
+        remark,
+        status,
+        image,
+        admin_done,
+        delay,
+        CASE WHEN planned_date IS NOT NULL THEN to_char(planned_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as planned_date,
+        CASE WHEN created_at IS NOT NULL THEN to_char(created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as created_at,
+        CASE WHEN task_start_date IS NOT NULL THEN to_char(task_start_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as task_start_date,
+        CASE WHEN submission_date IS NOT NULL THEN to_char(submission_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as submission_date,
+        admin_done_remarks,
+        ${table}.task_start_date as task_start_date_original
+      FROM ${table} 
+      WHERE 1=1
+    `;
 
     // ---------------------------
     // ROLE FILTER (USER)
     // ---------------------------
     if (role === "user" && username) {
-      query += ` AND LOWER(name) = LOWER('${username}')`;
+      query += ` AND LOWER(${table}.name) = LOWER('${username}')`;
     }
 
     // ---------------------------
     // ADMIN STAFF FILTER
     // ---------------------------
     if ((role === "admin" || role === "super_admin") && staffFilter !== "all") {
-      query += ` AND LOWER(name) = LOWER('${staffFilter}')`;
+      query += ` AND LOWER(${table}.name) = LOWER('${staffFilter}')`;
     }
 
     // ---------------------------
     // DEPARTMENT FILTER
     // ---------------------------
     if (dashboardType === "checklist" && departmentFilter !== "all") {
-      query += ` AND LOWER(department) = LOWER('${departmentFilter}')`;
+      query += ` AND LOWER(${table}.department) = LOWER('${departmentFilter}')`;
     }
 
     // ---------------------------
@@ -63,55 +86,62 @@ export const getDashboardData = async (req, res) => {
     if (taskView === "recent") {
       // TODAY TASKS
       query += `
-        AND task_start_date::date = CURRENT_DATE
+        AND ${table}.task_start_date::date = CURRENT_DATE
       `;
 
       // For checklist: status is enum 'yes'/'no', compare directly
       if (dashboardType === "checklist") {
         // query += ` AND (status IS NULL OR status <> 'yes')`;
-        query += ` AND submission_date IS NULL`;
+        query += ` AND ${table}.submission_date IS NULL`;
       }
     }
     else if (taskView === "upcoming") {
       // TOMORROW TASKS - Use the exact query that works in DB
       query += `
-        AND task_start_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
+        AND ${table}.task_start_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
       `;
       
       // For checklist: exclude completed tasks
       if (dashboardType === "checklist") {
         // query += ` AND (status IS NULL OR status <> 'yes')`;
-        query += ` AND submission_date IS NULL`;
+        query += ` AND ${table}.submission_date IS NULL`;
       }
     }
     else if (taskView === "overdue") {
       // PAST DUE + NOT COMPLETED
       query += `
-        AND task_start_date::date < CURRENT_DATE
+        AND ${table}.task_start_date::date < CURRENT_DATE
       `;
 
       if (dashboardType === "checklist") {
         // query += ` AND (status IS NULL OR status <> 'yes')`;
-        query += ` AND submission_date IS NULL`;
+        query += ` AND ${table}.submission_date IS NULL`;
       } else {
-        query += ` AND submission_date IS NULL`;
+        query += ` AND ${table}.submission_date IS NULL`;
       }
     }
     else if (taskView === "all") {
       // ALL TASKS IN CURRENT MONTH
       query += `
-        AND task_start_date >= '${firstDayStr} 00:00:00'
-        AND task_start_date <= '${currentDayStr} 23:59:59'
+        AND ${table}.task_start_date >= '${firstDayStr} 00:00:00'
+        AND ${table}.task_start_date <= '${currentDayStr} 23:59:59'
       `;
     }
 
     // ORDER + PAGINATION
-    query += ` ORDER BY task_start_date ASC LIMIT ${limit} OFFSET ${offset}`;
+    query += ` ORDER BY task_start_date_original ASC LIMIT ${limit} OFFSET ${offset}`;
 
     log("FINAL QUERY =>", query);
 
     const result = await pool.query(query);
-    res.json(result.rows);
+    
+    // Remove the helper column before returning
+    const rows = result.rows.map(row => {
+      const { task_start_date_original, ...rest } = row;
+      return rest;
+    });
+    
+    res.json(rows);
 
   } catch (err) {
     console.error("ERROR in getDashboardData:", err);
@@ -423,10 +453,10 @@ export const getChecklistByDateRange = async (req, res) => {
         image,
         admin_done,
         delay,
-        to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-        to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-        to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
-        to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+        CASE WHEN planned_date IS NOT NULL THEN to_char(planned_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as planned_date,
+        CASE WHEN created_at IS NOT NULL THEN to_char(created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as created_at,
+        CASE WHEN task_start_date IS NOT NULL THEN to_char(task_start_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as task_start_date,
+        CASE WHEN submission_date IS NOT NULL THEN to_char(submission_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as submission_date,
         admin_done_remarks,
         checklist.task_start_date as task_start_date_original
       FROM checklist
