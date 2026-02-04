@@ -172,6 +172,8 @@ export const sendDelegationStatusUpdateNotification = async (taskDetails, update
     statusText = 'Extended';
   }
 
+  const appLink = 'https://checklist-frontend-eight.vercel.app';
+  
   const message = `${statusHeader}
 
 Name: ${name || 'N/A'}
@@ -179,7 +181,10 @@ Task ID: ${task_id || 'N/A'}
 Description: ${task_description || 'N/A'}
 ${updateType === 'extend' ? `Extend Date: ${formatDate(next_extend_date)}\n` : ''}Remarks: ${reason || 'N/A'}
 
-📌 *Status:* Task marked as ${statusText}.`;
+📌 *Status:* Task marked as ${statusText}.
+
+App Link:
+${appLink}`;
 
   const result = await sendWhatsAppMessage(adminNumber, message);
   console.log(`[WhatsApp] Result for ${adminNumber}:`, JSON.stringify(result));
