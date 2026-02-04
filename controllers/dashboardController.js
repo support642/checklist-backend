@@ -403,33 +403,60 @@ export const getChecklistByDateRange = async (req, res) => {
       end = currentDayStr;
     }
 
-    // Build parameterized query to avoid string-based date comparisons
-    // Compare on date-only to avoid timezone boundary misses
+    // Build parameterized query
     const params = [start, end];
     let idx = 3;
 
+    // Query with original columns, we'll format dates after fetching
     let query = `
-      SELECT * FROM checklist
-      WHERE task_start_date::date >= $1::date
-      AND task_start_date::date <= $2::date
+      SELECT 
+        task_id,
+        department,
+        given_by,
+        name,
+        task_description,
+        enable_reminder,
+        require_attachment,
+        frequency,
+        remark,
+        status,
+        image,
+        admin_done,
+        delay,
+        to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
+        to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
+        to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
+        to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+        admin_done_remarks,
+        checklist.task_start_date as task_start_date_original
+      FROM checklist
+      WHERE checklist.task_start_date::date >= $1::date
+      AND checklist.task_start_date::date <= $2::date
     `;
 
     if (staffFilter && staffFilter !== "all") {
-      query += ` AND LOWER(name)=LOWER($${idx++})`;
+      query += ` AND LOWER(checklist.name)=LOWER($${idx++})`;
       params.push(staffFilter);
     }
 
     if (departmentFilter && departmentFilter !== "all") {
-      query += ` AND LOWER(department)=LOWER($${idx++})`;
+      query += ` AND LOWER(checklist.department)=LOWER($${idx++})`;
       params.push(departmentFilter);
     }
 
-    // Keep the payload bounded to avoid overwhelming the client
-    query += " ORDER BY task_start_date ASC LIMIT 5000";
+    // Use the original timestamp column for sorting
+    query += " ORDER BY task_start_date_original ASC LIMIT 5000";
 
     const result = await pool.query(query, params);
+    
+    // Remove the helper column before returning
+    const rows = result.rows.map(row => {
+      const { task_start_date_original, ...rest } = row;
+      return rest;
+    });
+    
     log("DATE RANGE QUERY =>", query, "PARAMS =>", params, "ROWS =>", result.rowCount);
-    res.json(result.rows);
+    res.json(rows);
   } catch (err) {
     console.error("CHECKLIST DATE RANGE ERROR:", err.message);
     res.status(500).json({ error: "Error fetching checklist by date range" });

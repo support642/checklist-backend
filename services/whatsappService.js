@@ -153,7 +153,7 @@ Shri Shyam Group.`;
 export const sendDelegationStatusUpdateNotification = async (taskDetails, updateType) => {
   const { name, task_id, task_description, next_extend_date, reason } = taskDetails;
   
-  const adminNumber = '8959912222';
+  const adminNumber = '9637655555';
   
   console.log(`[WhatsApp] Update Type: ${updateType}, Task ID: ${task_id}, Admin Number: ${adminNumber}`);
   console.log(`[WhatsApp] Name: ${name}, Next Extend Date: ${next_extend_date}`);
