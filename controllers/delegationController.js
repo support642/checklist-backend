@@ -33,6 +33,7 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           image,
           to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
           remarks,
+          adminremarks,
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
@@ -65,6 +66,7 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           image,
           to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
           remarks,
+          adminremarks,
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
@@ -96,6 +98,7 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           image,
           to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
           remarks,
+          adminremarks,
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
@@ -141,7 +144,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         dd.admin_done,
         dd.admin_done_remarks,
         to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-        to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
+        to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+        d.adminremarks,
+        d.department
       FROM delegation_done dd
       LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
       ORDER BY dd.created_at DESC;
@@ -164,7 +169,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
           dd.admin_done,
           dd.admin_done_remarks,
           to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
+          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+          d.adminremarks,
+          d.department
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE dd.name = '${username}'
@@ -195,7 +202,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
           dd.admin_done,
           dd.admin_done_remarks,
           to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date
+          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
+          d.adminremarks,
+          d.department
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE LOWER(d.department) IN (${depts})
@@ -615,6 +624,44 @@ ${appLink}`;
 
   } catch (err) {
     console.error("❌ sendDelegationWhatsAppNotification Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+
+/* ------------------------------------------------------
+   UPDATE ADMIN REMARKS - For super admin to reply to tasks
+------------------------------------------------------ */
+export const updateAdminRemarks = async (req, res) => {
+  try {
+    const { task_id } = req.params;
+    const { adminremarks } = req.body;
+
+    if (!task_id) {
+      return res.status(400).json({ error: "task_id is required" });
+    }
+
+    const updateQuery = `
+      UPDATE delegation
+      SET adminremarks = $1,
+          updated_at = NOW() AT TIME ZONE 'Asia/Kolkata'
+      WHERE task_id = $2
+      RETURNING task_id, adminremarks, to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at;
+    `;
+
+    const result = await pool.query(updateQuery, [adminremarks || null, task_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    res.json({
+      message: "Admin remarks updated successfully",
+      data: result.rows[0]
+    });
+
+  } catch (err) {
+    console.error("❌ updateAdminRemarks Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
