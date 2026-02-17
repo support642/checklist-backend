@@ -702,3 +702,80 @@ export const updateUserRemarks = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+
+/* ------------------------------------------------------
+   REVERT TO PENDING - Delete from delegation_done & reset delegation
+------------------------------------------------------ */
+export const revertDelegationTask = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { items } = req.body; // Array of { id, task_id }
+
+    console.log("🔄 Revert Request Body:", JSON.stringify(req.body, null, 2));
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "No items provided for revert" });
+    }
+
+    console.log(`🔄 Reverting ${items.length} tasks to pending...`);
+
+    await client.query("BEGIN");
+
+    for (const item of items) {
+      const { id, task_id } = item;
+
+      if (!task_id) {
+        console.warn(`⚠️ Skipping item with missing task_id:`, item);
+        continue;
+      }
+
+      // 1. DELETE from delegation_done using specific ID (if provided) or task_id (fallback to latest?)
+      // We should really depend on 'id' from delegation_done if possible.
+      // If id is provided, delete that specific entry.
+      // If only task_id provided, we might delete all done entries? prefer id.
+      
+      if (id) {
+        await client.query("DELETE FROM delegation_done WHERE id = $1", [id]);
+        console.log(`🗑️ Deleted delegation_done row id: ${id}`);
+      } else {
+        // Fallback: Delete all done entries for this task? Or just the latest?
+        // Let's assume for now we always have ID from frontend selection.
+        console.warn(`⚠️ No done_id provided for task ${task_id}, skipping deletion of done record to avoid data loss default behavior.`);
+      }
+
+      // 2. UPDATE delegation table
+      // Reset status to 'pending' (or whatever default is), clear submission_date
+      // Using 'pending' as default per requirement.
+      const updateQuery = `
+        UPDATE delegation
+        SET status = 'pending',
+            submission_date = NULL,
+            updated_at = NOW() AT TIME ZONE 'Asia/Kolkata',
+            adminremarks = NULL
+        WHERE task_id = $1
+      `;
+      // Note: admin_done isn't in delegation table based on previous schema checks, it was in delegation_done? 
+      // Wait, let's double check schema. 
+      // fetchDelegation_DoneDataSortByDate query: 
+      // SELECT ... dd.admin_done, dd.admin_done_remarks ... FROM delegation_done dd ...
+      // So admin_done is in delegation_done. We just deleted the row, so that's fine.
+      // But we need to update delegation status.
+
+      await client.query(updateQuery, [task_id]);
+      console.log(`🔄 Updated delegation status for task_id: ${task_id}`);
+    }
+
+    await client.query("COMMIT");
+    console.log("✅ Revert successful");
+
+    res.json({ message: "Tasks reverted to pending successfully" });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("❌ revertDelegationTask Error:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+};

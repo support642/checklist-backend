@@ -6,7 +6,8 @@ import {
   adminDoneDelegation,
   sendDelegationWhatsAppNotification,
   updateAdminRemarks,
-  updateUserRemarks
+  updateUserRemarks,
+  revertDelegationTask
 } from "../controllers/delegationController.js";
 
 const router = express.Router();
@@ -18,5 +19,6 @@ router.post("/delegation/admin-done", adminDoneDelegation);
 router.post("/delegation/send-whatsapp", sendDelegationWhatsAppNotification);
 router.patch("/delegation/:task_id/admin-remarks", updateAdminRemarks);
 router.patch("/delegation/:task_id/user-remarks", updateUserRemarks);
+router.post("/delegation/revert", revertDelegationTask);
 
 export default router;
