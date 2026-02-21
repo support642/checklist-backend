@@ -111,8 +111,8 @@ export const postAssignTasks = async (req, res) => {
 
       tasks.forEach((t, i) => {
         values.push(
-          `($${i*11+1}, $${i*11+2}, $${i*11+3}, $${i*11+4}, $${i*11+5},
-            $${i*11+6}, $${i*11+7}, $${i*11+8}, $${i*11+9}, $${i*11+10}, $${i*11+11})`
+          `($${i * 13 + 1}, $${i * 13 + 2}, $${i * 13 + 3}, $${i * 13 + 4}, $${i * 13 + 5},
+            $${i * 13 + 6}, $${i * 13 + 7}, $${i * 13 + 8}, $${i * 13 + 9}, $${i * 13 + 10}, $${i * 13 + 11}, $${i * 13 + 12}, $${i * 13 + 13})`
         );
         params.push(
           t.department,
@@ -125,14 +125,16 @@ export const postAssignTasks = async (req, res) => {
           t.dueDate,           // planned_date (the selected end/due date)
           null,                // status
           new Date().toISOString().slice(0, 19).replace('T', ' '),  // task_start_date (current timestamp)
-          imageUrl            // <-- NEW
+          imageUrl,            // image
+          t.unit || null,      // unit
+          t.division || null   // division
         );
       });
 
       const result = await pool.query(
         `INSERT INTO delegation 
         (department, given_by, name, task_description, frequency,
-         enable_reminder, require_attachment, planned_date, status, task_start_date, image)
+         enable_reminder, require_attachment, planned_date, status, task_start_date, image, unit, division)
         VALUES ${values.join(",")}
         RETURNING task_id`,
         params
@@ -146,40 +148,42 @@ export const postAssignTasks = async (req, res) => {
       const values = [];
       const params = [];
 
-     tasks.forEach((t, i) => {
+      tasks.forEach((t, i) => {
 
-  const startDate = t.taskStartDate || t.startDate || t.dueDate;  
+        const startDate = t.taskStartDate || t.startDate || t.dueDate;
 
-  values.push(
-    `($${i*14+1}, $${i*14+2}, $${i*14+3}, $${i*14+4}, $${i*14+5},
-      $${i*14+6}, $${i*14+7}, $${i*14+8}, $${i*14+9},
-      $${i*14+10}, $${i*14+11}, $${i*14+12}, $${i*14+13}, $${i*14+14})`
-  );
+        values.push(
+          `($${i * 16 + 1}, $${i * 16 + 2}, $${i * 16 + 3}, $${i * 16 + 4}, $${i * 16 + 5},
+      $${i * 16 + 6}, $${i * 16 + 7}, $${i * 16 + 8}, $${i * 16 + 9},
+      $${i * 16 + 10}, $${i * 16 + 11}, $${i * 16 + 12}, $${i * 16 + 13}, $${i * 16 + 14}, $${i * 16 + 15}, $${i * 16 + 16})`
+        );
 
-  params.push(
-    t.department,                 // 1
-    t.givenBy,                    // 2
-    t.doer,                       // 3
-    t.description,                // 4
-    t.enableReminders ? "yes" : "no",  // 5
-    t.requireAttachment ? "yes" : "no", // 6
-    t.frequency,                    // 7
-    null,                          // 8 remark
-    null,                          // 9 status
-    imageUrl,                      // 10 image
-    null,                          // 11 admin_done
-    startDate,                     // 12 planned_date
-    startDate,                     // 13 task_start_date 🔥 FIXED
-    null                           // 14 submission_date
-  );
-});
+        params.push(
+          t.department,                 // 1
+          t.givenBy,                    // 2
+          t.doer,                       // 3
+          t.description,                // 4
+          t.enableReminders ? "yes" : "no",  // 5
+          t.requireAttachment ? "yes" : "no", // 6
+          t.frequency,                    // 7
+          null,                          // 8 remark
+          null,                          // 9 status
+          imageUrl,                      // 10 image
+          null,                          // 11 admin_done
+          startDate,                     // 12 planned_date
+          startDate,                     // 13 task_start_date
+          null,                          // 14 submission_date
+          t.unit || null,                // 15 unit
+          t.division || null             // 16 division
+        );
+      });
 
 
       const result = await pool.query(
         `INSERT INTO checklist 
         (department, given_by, name, task_description, enable_reminder,
          require_attachment, frequency, remark, status, image, admin_done,
-         planned_date, task_start_date, submission_date)
+         planned_date, task_start_date, submission_date, unit, division)
         VALUES ${values.join(",")}
         RETURNING task_id`,
         params
@@ -192,7 +196,7 @@ export const postAssignTasks = async (req, res) => {
     // 🔔 Send WhatsApp notification to the doer
     try {
       const doerName = tasks[0].doer;
-      
+
       // Look up doer's phone number from users table
       const userResult = await pool.query(
         'SELECT number FROM users WHERE user_name = $1',
@@ -201,7 +205,7 @@ export const postAssignTasks = async (req, res) => {
 
       if (userResult.rows.length > 0 && userResult.rows[0].number) {
         const phoneNumber = userResult.rows[0].number;
-        
+
         // Send notification asynchronously (don't block response)
         sendTaskAssignmentNotification(phoneNumber, {
           doerName: doerName,
@@ -227,8 +231,8 @@ export const postAssignTasks = async (req, res) => {
       console.error('❌ WhatsApp notification error:', notifyError.message);
     }
 
-    res.json({ 
-      message: "Tasks inserted", 
+    res.json({
+      message: "Tasks inserted",
       count: tasks.length,
       image: imageUrl
     });

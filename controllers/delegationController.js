@@ -37,7 +37,9 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
-          delay
+          delay,
+          unit,
+          division
         FROM delegation
         WHERE name = '${username}'
         AND (
@@ -70,7 +72,9 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
-          delay
+          delay,
+          unit,
+          division
         FROM delegation
         WHERE (
           (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
@@ -102,7 +106,9 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
           to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
           color_code_for,
-          delay
+          delay,
+          unit,
+          division
         FROM delegation
         ORDER BY task_start_date ASC;
       `;
@@ -146,7 +152,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
         to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
         d.adminremarks,
-        d.department
+        d.department,
+        d.unit,
+        d.division
       FROM delegation_done dd
       LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
       ORDER BY dd.created_at DESC;
@@ -171,7 +179,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
           to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
           to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
           d.adminremarks,
-          d.department
+          d.department,
+          d.unit,
+          d.division
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE dd.name = '${username}'
@@ -204,7 +214,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
           to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
           to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
           d.adminremarks,
-          d.department
+          d.department,
+          d.unit,
+          d.division
         FROM delegation_done dd
         LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
         WHERE LOWER(d.department) IN (${depts})
@@ -237,7 +249,7 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
 //     const results = [];
 
 //     for (const task of selectedDataArray) {
-      
+
 //       const statusForDone =
 //         task.status === "done"
 //           ? "completed"
@@ -336,19 +348,19 @@ export const insertDelegationDoneAndUpdate = async (req, res) => {
         task.status === "done"
           ? "completed"
           : task.status === "partial_done"
-          ? "completed"
-          : task.status === "extend"
-          ? "extend"
-          : "in_progress";
+            ? "completed"
+            : task.status === "extend"
+              ? "extend"
+              : "in_progress";
 
       const statusForDelegation =
         task.status === "done"
           ? "done"
           : task.status === "partial_done"
-          ? "partial_done"
-          : task.status === "extend"
-          ? "extend"
-          : null;
+            ? "partial_done"
+            : task.status === "extend"
+              ? "extend"
+              : null;
 
       /* -----------------------------------------
          2️⃣ Handle Image Uploads
@@ -734,7 +746,7 @@ export const revertDelegationTask = async (req, res) => {
       // We should really depend on 'id' from delegation_done if possible.
       // If id is provided, delete that specific entry.
       // If only task_id provided, we might delete all done entries? prefer id.
-      
+
       if (id) {
         await client.query("DELETE FROM delegation_done WHERE id = $1", [id]);
         console.log(`🗑️ Deleted delegation_done row id: ${id}`);

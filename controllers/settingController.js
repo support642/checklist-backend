@@ -154,9 +154,10 @@ export const deleteUser = async (req, res) => {
 export const getDepartments = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT DISTINCT department, given_by, id
+      SELECT DISTINCT department, given_by, unit, division, id
       FROM users
-      WHERE department IS NOT NULL AND department <> ''
+      WHERE (department IS NOT NULL AND department <> '')
+         OR (given_by IS NOT NULL AND given_by <> '')
       ORDER BY department ASC
     `);
 
@@ -228,13 +229,13 @@ export const getGivenByData = async (req, res) => {
  *******************************/
 export const createDepartment = async (req, res) => {
   try {
-    const { name, givenBy } = req.body;
+    const { name, givenBy, unit, division } = req.body;
 
     const result = await pool.query(`
-      INSERT INTO users (department, given_by)
-      VALUES ($1, $2)
+      INSERT INTO users (department, given_by, unit, division)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
-    `, [name, givenBy]);
+    `, [name, givenBy, unit || null, division || null]);
 
     res.json(result.rows[0]);
 
@@ -251,14 +252,14 @@ export const createDepartment = async (req, res) => {
 export const updateDepartment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { department, given_by } = req.body;
+    const { department, given_by, unit, division } = req.body;
 
     const result = await pool.query(`
       UPDATE users 
-      SET department = $1, given_by = $2
-      WHERE id = $3
+      SET department = $1, given_by = $2, unit = $3, division = $4
+      WHERE id = $5
       RETURNING *
-    `, [department, given_by, id]);
+    `, [department, given_by, unit || null, division || null, id]);
 
     res.json(result.rows[0]);
 

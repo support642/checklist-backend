@@ -58,6 +58,8 @@ export const getPendingChecklist = async (req, res) => {
         task_start_date::text as task_start_date,
         submission_date::text as submission_date,
         admin_done_remarks,
+        unit,
+        division,
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}
@@ -164,6 +166,8 @@ export const getChecklistHistory = async (req, res) => {
         task_start_date::text as task_start_date,
         submission_date::text as submission_date,
         admin_done_remarks,
+        unit,
+        division,
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}

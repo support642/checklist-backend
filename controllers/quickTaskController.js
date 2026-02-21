@@ -157,11 +157,11 @@ export const deleteDelegationTasks = async (taskIds) => {
 export const updateChecklistTask = async (updatedTask, originalTask) => {
   try {
     // Sanitize enum values to match database enum ('yes', 'no')
-    const sanitizedEnableReminder = updatedTask.enable_reminder 
-      ? updatedTask.enable_reminder.toLowerCase() 
+    const sanitizedEnableReminder = updatedTask.enable_reminder
+      ? updatedTask.enable_reminder.toLowerCase()
       : null;
-    const sanitizedRequireAttachment = updatedTask.require_attachment 
-      ? updatedTask.require_attachment.toLowerCase() 
+    const sanitizedRequireAttachment = updatedTask.require_attachment
+      ? updatedTask.require_attachment.toLowerCase()
       : null;
 
     const sql = `
@@ -173,10 +173,12 @@ export const updateChecklistTask = async (updatedTask, originalTask) => {
         task_description = $4,
         enable_reminder = $5,
         require_attachment = $6,
-        remark = $7
-      WHERE department = $8
-      AND name = $9
-      AND task_description = $10
+        remark = $7,
+        unit = $8,
+        division = $9
+      WHERE department = $10
+      AND name = $11
+      AND task_description = $12
       AND submission_date IS NULL
       RETURNING *;
     `;
@@ -189,6 +191,8 @@ export const updateChecklistTask = async (updatedTask, originalTask) => {
       sanitizedEnableReminder,
       sanitizedRequireAttachment,
       updatedTask.remark,
+      updatedTask.unit,
+      updatedTask.division,
 
       originalTask.department,
       originalTask.name,
