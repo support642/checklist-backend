@@ -88,6 +88,8 @@ export const updateUser = async (req, res) => {
       status,
       user_access,
       department,
+      unit,
+      division,
       given_by,
       leave_date,
       leave_end_date,
@@ -108,7 +110,9 @@ export const updateUser = async (req, res) => {
         given_by = $10,
         leave_date = $11,
         leave_end_date = $12,
-        remark = $13
+        remark = $13,
+        unit = $15,
+        division = $16
       WHERE id = $14
       RETURNING *
     `;
@@ -116,7 +120,7 @@ export const updateUser = async (req, res) => {
     const values = [
       user_name, password, email_id, number, employee_id,
       role, status, user_access, department, given_by,
-      leave_date, leave_end_date, remark, id
+      leave_date, leave_end_date, remark, id, unit || null, division || null
     ];
 
     const result = await pool.query(query, values);

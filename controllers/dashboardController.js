@@ -23,6 +23,8 @@ export const getDashboardData = async (req, res) => {
       page = 1,
       limit = 50,
       departmentFilter,
+      unitFilter,
+      divisionFilter,
       role,
       username,
       taskView = "recent"
@@ -30,7 +32,7 @@ export const getDashboardData = async (req, res) => {
 
     const table = dashboardType;
     const offset = (page - 1) * limit;
-    
+
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -76,8 +78,22 @@ export const getDashboardData = async (req, res) => {
     // ---------------------------
     // DEPARTMENT FILTER
     // ---------------------------
-    if (dashboardType === "checklist" && departmentFilter !== "all") {
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all") {
       query += ` AND LOWER(${table}.department) = LOWER('${departmentFilter}')`;
+    }
+
+    // ---------------------------
+    // UNIT FILTER
+    // ---------------------------
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(${table}.unit) = LOWER('${unitFilter}')`;
+    }
+
+    // ---------------------------
+    // DIVISION FILTER
+    // ---------------------------
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(${table}.division) = LOWER('${divisionFilter}')`;
     }
 
     // ---------------------------
@@ -100,7 +116,7 @@ export const getDashboardData = async (req, res) => {
       query += `
         AND ${table}.task_start_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
       `;
-      
+
       // For checklist: exclude completed tasks
       if (dashboardType === "checklist") {
         // query += ` AND (status IS NULL OR status <> 'yes')`;
@@ -134,13 +150,13 @@ export const getDashboardData = async (req, res) => {
     log("FINAL QUERY =>", query);
 
     const result = await pool.query(query);
-    
+
     // Remove the helper column before returning
     const rows = result.rows.map(row => {
       const { task_start_date_original, ...rest } = row;
       return rest;
     });
-    
+
     res.json(rows);
 
   } catch (err) {
@@ -151,10 +167,10 @@ export const getDashboardData = async (req, res) => {
 
 export const getTotalTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
+    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
 
     const table = dashboardType;
-    
+
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -176,8 +192,16 @@ export const getTotalTask = async (req, res) => {
     }
 
     // DEPARTMENT FILTER (checklist only)
-    if (dashboardType === "checklist" && departmentFilter !== "all") {
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all") {
       query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+    }
+
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(unit)=LOWER('${unitFilter}')`;
+    }
+
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(division)=LOWER('${divisionFilter}')`;
     }
 
     const result = await pool.query(query);
@@ -190,10 +214,10 @@ export const getTotalTask = async (req, res) => {
 
 export const getCompletedTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
+    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
 
     const table = dashboardType;
-    
+
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -212,8 +236,12 @@ export const getCompletedTask = async (req, res) => {
 
     if (role === "user" && username) query += ` AND LOWER(name)=LOWER('${username}')`;
     if ((role === "admin" || role === "super_admin") && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
-    if (dashboardType === "checklist" && departmentFilter !== "all")
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all")
       query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all")
+      query += ` AND LOWER(unit)=LOWER('${unitFilter}')`;
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all")
+      query += ` AND LOWER(division)=LOWER('${divisionFilter}')`;
 
     const result = await pool.query(query);
     res.json(Number(result.rows[0].count));
@@ -228,7 +256,7 @@ export const getCompletedTask = async (req, res) => {
 //     const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
 
 //     const table = dashboardType;
-    
+
 //     // Get current month range
 //     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -260,7 +288,7 @@ export const getCompletedTask = async (req, res) => {
 
 export const getPendingTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
+    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
     const table = dashboardType;
 
     // Align with "recent" list logic: only today's tasks that are not submitted
@@ -279,8 +307,12 @@ export const getPendingTask = async (req, res) => {
       query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
 
     // Department filter
-    if (dashboardType === "checklist" && departmentFilter !== "all")
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all")
       query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all")
+      query += ` AND LOWER(unit)=LOWER('${unitFilter}')`;
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all")
+      query += ` AND LOWER(division)=LOWER('${divisionFilter}')`;
 
     const result = await pool.query(query);
     res.json(Number(result.rows[0].count));
@@ -294,9 +326,9 @@ export const getPendingTask = async (req, res) => {
 
 export const getNotDoneTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
+    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
     const table = dashboardType;
-    
+
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -317,8 +349,16 @@ export const getNotDoneTask = async (req, res) => {
       query += ` AND name = '${staffFilter}'`;
     }
 
-    if (dashboardType === "checklist" && departmentFilter !== "all") {
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all") {
       query += ` AND department = '${departmentFilter}'`;
+    }
+
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
+      query += ` AND unit = '${unitFilter}'`;
+    }
+
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
+      query += ` AND division = '${divisionFilter}'`;
     }
 
     const result = await pool.query(query);
@@ -332,7 +372,7 @@ export const getNotDoneTask = async (req, res) => {
 
 export const getOverdueTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, role, username } = req.query;
+    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
 
     const table = dashboardType;
     const params = [];
@@ -358,9 +398,17 @@ export const getOverdueTask = async (req, res) => {
     }
 
     // Department filter
-    if (dashboardType === "checklist" && departmentFilter !== "all") {
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all") {
       query += ` AND LOWER(department)=LOWER($${idx++})`;
       params.push(departmentFilter);
+    }
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(unit)=LOWER($${idx++})`;
+      params.push(unitFilter);
+    }
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(division)=LOWER($${idx++})`;
+      params.push(divisionFilter);
     }
 
     const result = await pool.query(query, params);
@@ -402,10 +450,10 @@ export const getStaffByDepartment = async (req, res) => {
       staff = staff.filter(u => {
         // Match if user's primary department matches
         const deptMatch = u.department && u.department.toLowerCase() === department.toLowerCase();
-        
+
         // Match if user has access to the department
         const accessMatch = u.user_access && u.user_access.toLowerCase().includes(department.toLowerCase());
-        
+
         return deptMatch || accessMatch;
       });
     }
@@ -421,12 +469,12 @@ export const getStaffByDepartment = async (req, res) => {
 
 export const getChecklistByDateRange = async (req, res) => {
   try {
-    const { startDate, endDate, staffFilter = "all", departmentFilter = "all" } = req.query;
+    const { startDate, endDate, staffFilter = "all", departmentFilter = "all", unitFilter = "all", divisionFilter = "all" } = req.query;
 
     // If no specific date range is provided, default to current month
     let start = startDate;
     let end = endDate;
-    
+
     if (!startDate || !endDate) {
       const { firstDayStr, currentDayStr } = getCurrentMonthRange();
       start = firstDayStr;
@@ -474,17 +522,27 @@ export const getChecklistByDateRange = async (req, res) => {
       params.push(departmentFilter);
     }
 
+    if (unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(checklist.unit)=LOWER($${idx++})`;
+      params.push(unitFilter);
+    }
+
+    if (divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(checklist.division)=LOWER($${idx++})`;
+      params.push(divisionFilter);
+    }
+
     // Use the original timestamp column for sorting
     query += " ORDER BY task_start_date_original ASC LIMIT 5000";
 
     const result = await pool.query(query, params);
-    
+
     // Remove the helper column before returning
     const rows = result.rows.map(row => {
       const { task_start_date_original, ...rest } = row;
       return rest;
     });
-    
+
     log("DATE RANGE QUERY =>", query, "PARAMS =>", params, "ROWS =>", result.rowCount);
     res.json(rows);
   } catch (err) {
@@ -495,12 +553,12 @@ export const getChecklistByDateRange = async (req, res) => {
 
 export const getChecklistStatsByDate = async (req, res) => {
   try {
-    const { startDate, endDate, staffFilter = "all", departmentFilter = "all" } = req.query;
+    const { startDate, endDate, staffFilter = "all", departmentFilter = "all", unitFilter = "all", divisionFilter = "all" } = req.query;
 
     // If no date range provided, default to current month
     let start = startDate;
     let end = endDate;
-    
+
     if (!startDate || !endDate) {
       const { firstDayStr, currentDayStr } = getCurrentMonthRange();
       start = firstDayStr;
@@ -535,6 +593,14 @@ export const getChecklistStatsByDate = async (req, res) => {
       query += ` AND LOWER(department)=LOWER($${idx++})`;
       params.push(departmentFilter);
     }
+    if (unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(unit)=LOWER($${idx++})`;
+      params.push(unitFilter);
+    }
+    if (divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(division)=LOWER($${idx++})`;
+      params.push(divisionFilter);
+    }
 
     const result = await pool.query(query, params);
     log("DATE RANGE STATS QUERY =>", query, "PARAMS =>", params, "ROWS =>", result.rowCount);
@@ -564,7 +630,7 @@ export const getStaffTaskSummary = async (req, res) => {
   try {
     const { dashboardType } = req.query;
     const table = dashboardType;
-    
+
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
@@ -601,7 +667,7 @@ export const getStaffTaskSummary = async (req, res) => {
     }));
 
     res.json(formatted);
-    
+
   } catch (err) {
     console.error("STAFF SUMMARY ERROR:", err.message);
     res.status(500).json({ error: "Error fetching staff task summary" });
@@ -610,11 +676,13 @@ export const getStaffTaskSummary = async (req, res) => {
 
 export const getDashboardDataCount = async (req, res) => {
   try {
-    const { 
-      dashboardType, 
-      staffFilter = "all", 
-      taskView = "recent", 
-      departmentFilter = "all" 
+    const {
+      dashboardType,
+      staffFilter = "all",
+      taskView = "recent",
+      departmentFilter = "all",
+      unitFilter = "all",
+      divisionFilter = "all"
     } = req.query;
 
     const role = req.query.role;
@@ -638,8 +706,14 @@ export const getDashboardDataCount = async (req, res) => {
     }
 
     // DEPARTMENT FILTER (checklist only)
-    if (dashboardType === "checklist" && departmentFilter !== "all") {
+    if (dashboardType === "checklist" && departmentFilter && departmentFilter !== "all") {
       query += ` AND LOWER(department) = LOWER('${departmentFilter}')`;
+    }
+    if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(unit) = LOWER('${unitFilter}')`;
+    }
+    if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(division) = LOWER('${divisionFilter}')`;
     }
 
     // TASK VIEW LOGIC
@@ -652,7 +726,7 @@ export const getDashboardDataCount = async (req, res) => {
         // query += ` AND (status IS NULL OR status <> 'yes')`;
         query += ` AND submission_date IS NULL`;
       }
-    } 
+    }
     else if (taskView === "upcoming") {
       query += `
         AND DATE(task_start_date) = CURRENT_DATE + INTERVAL '1 day'
@@ -676,10 +750,10 @@ export const getDashboardDataCount = async (req, res) => {
 
     const result = await pool.query(query);
     const count = Number(result.rows[0].count || 0);
-    
+
     log("COUNT QUERY for", taskView, "=>", query);
     log("COUNT RESULT:", count);
-    
+
     res.json(count);
 
   } catch (err) {
@@ -690,12 +764,14 @@ export const getDashboardDataCount = async (req, res) => {
 
 export const getChecklistDateRangeCount = async (req, res) => {
   try {
-    const { 
-      startDate, 
-      endDate, 
-      staffFilter = "all", 
-      departmentFilter = "all", 
-      statusFilter = "all" 
+    const {
+      startDate,
+      endDate,
+      staffFilter = "all",
+      departmentFilter = "all",
+      unitFilter = "all",
+      divisionFilter = "all",
+      statusFilter = "all"
     } = req.query;
 
     const role = req.query.role;
@@ -704,7 +780,7 @@ export const getChecklistDateRangeCount = async (req, res) => {
     // If no date range provided, default to current month
     let start = startDate;
     let end = endDate;
-    
+
     if (!startDate || !endDate) {
       const { firstDayStr, currentDayStr } = getCurrentMonthRange();
       start = firstDayStr;
@@ -735,9 +811,17 @@ export const getChecklistDateRangeCount = async (req, res) => {
     }
 
     // DEPARTMENT FILTER
-    if (departmentFilter !== "all") {
+    if (departmentFilter && departmentFilter !== "all") {
       query += ` AND LOWER(department) = LOWER($${idx++})`;
       params.push(departmentFilter);
+    }
+    if (unitFilter && unitFilter !== "all") {
+      query += ` AND LOWER(unit) = LOWER($${idx++})`;
+      params.push(unitFilter);
+    }
+    if (divisionFilter && divisionFilter !== "all") {
+      query += ` AND LOWER(division) = LOWER($${idx++})`;
+      params.push(divisionFilter);
     }
 
     // STATUS FILTER
@@ -759,7 +843,7 @@ export const getChecklistDateRangeCount = async (req, res) => {
 
     const result = await pool.query(query, params);
     const count = Number(result.rows[0].count || 0);
-    
+
     res.json(count);
 
   } catch (err) {
