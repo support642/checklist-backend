@@ -35,15 +35,17 @@ export const createUser = async (req, res) => {
       givenBy,
       role,
       status,
-      user_access
+      user_access,
+      unit,
+      division
     } = req.body;
 
     const query = `
       INSERT INTO users (
         user_name, password, email_id, number, department,
-        given_by, role, status, user_access
+        given_by, role, status, user_access, unit, division
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING *
     `;
 
@@ -57,7 +59,9 @@ export const createUser = async (req, res) => {
       givenBy || null,
       role || 'employee',
       status || 'active',
-      user_access || null
+      user_access || null,
+      unit || null,
+      division || null
     ];
 
     const result = await pool.query(query, values);

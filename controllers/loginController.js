@@ -11,7 +11,7 @@ export const loginUserController = async (req, res) => {
 
     // Query PostgreSQL
     const query = `
-      SELECT user_name, password, role, status, email_id, user_access 
+      SELECT user_name, password, role, status, email_id, user_access, unit, division, department 
       FROM users 
       WHERE user_name = $1 AND password = $2
       LIMIT 1
@@ -35,7 +35,10 @@ export const loginUserController = async (req, res) => {
       user_name: user.user_name,
       role: user.role,
       email_id: user.email_id,
-      user_access: user.user_access
+      user_access: user.user_access,
+      unit: user.unit,
+      division: user.division,
+      department: user.department
     });
 
   } catch (err) {

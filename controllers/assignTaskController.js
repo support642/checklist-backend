@@ -2,6 +2,22 @@ import pool from "../config/db.js";
 import { uploadToS3 } from "../middleware/s3Upload.js";
 import { sendTaskAssignmentNotification } from "../services/whatsappService.js";
 
+// 0️⃣ User Profile (for AssignTaskUser pre-fill)
+export const getUserProfile = async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { rows } = await pool.query(
+      `SELECT user_name, unit, division, department FROM users WHERE user_name = $1 LIMIT 1`,
+      [username]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "User not found" });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server Error");
+  }
+};
+
 // 1️⃣ Departments
 export const getUniqueDepartments = async (req, res) => {
   try {
@@ -124,7 +140,7 @@ export const postAssignTasks = async (req, res) => {
           t.requireAttachment ? "yes" : "no",
           t.dueDate,           // planned_date (the selected end/due date)
           null,                // status
-          new Date().toISOString().slice(0, 19).replace('T', ' '),  // task_start_date (current timestamp)
+          t.taskStartDate || new Date().toISOString().slice(0, 19).replace('T', ' '),  // task_start_date (from frontend or current timestamp)
           imageUrl,            // image
           t.unit || null,      // unit
           t.division || null   // division

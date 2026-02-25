@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getUserProfile,
   getUniqueDepartments,
   getUniqueGivenBy,
   getUniqueDoerNames,
@@ -9,6 +10,9 @@ import {
 import upload from "../middleware/s3Upload.js"
 
 const router = express.Router();
+
+// User Profile (for pre-fill)
+router.get("/user-profile/:username", getUserProfile);
 
 // Departments
 router.get("/departments/:user_name", getUniqueDepartments);
