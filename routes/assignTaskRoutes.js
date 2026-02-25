@@ -4,6 +4,7 @@ import {
   getUniqueDepartments,
   getUniqueGivenBy,
   getUniqueDoerNames,
+  getAllDoerNames,
   getWorkingDays,
   postAssignTasks
 } from "../controllers/assignTaskController.js";
@@ -20,7 +21,8 @@ router.get("/departments/:user_name", getUniqueDepartments);
 // Given By
 router.get("/given-by", getUniqueGivenBy);
 
-// Doer Names
+// Doer Names (filtered by department)
+router.get("/doer-all", getAllDoerNames);
 router.get("/doer/:department", getUniqueDoerNames);
 
 // Working Days

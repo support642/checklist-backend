@@ -69,20 +69,47 @@ export const getUniqueGivenBy = async (req, res) => {
   }
 };
 
-// 3️⃣ Doer Names (FIXED ✔)
+// 3️⃣ Doer Names (FIXED ✔) — now also filters by unit & division
 export const getUniqueDoerNames = async (req, res) => {
   try {
     const { department } = req.params;
+    const { unit, division } = req.query;
 
+    let query = `SELECT DISTINCT user_name
+       FROM users 
+       WHERE status='active'
+         AND LOWER(user_access) = LOWER($1)`;
+    const params = [department];
+
+    if (unit) {
+      params.push(unit);
+      query += ` AND LOWER(unit) = LOWER($${params.length})`;
+    }
+    if (division) {
+      params.push(division);
+      query += ` AND LOWER(division) = LOWER($${params.length})`;
+    }
+
+    query += ` ORDER BY user_name ASC`;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows.map(r => r.user_name));
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server Error");
+  }
+};
+
+// 3b️⃣ All Doer Names (no department filter)
+export const getAllDoerNames = async (req, res) => {
+  try {
     const result = await pool.query(
       `SELECT DISTINCT user_name
        FROM users 
        WHERE status='active'
-         AND LOWER(user_access) = LOWER($1)
-       ORDER BY user_name ASC`,
-      [department]
+       ORDER BY user_name ASC`
     );
-
     res.json(result.rows.map(r => r.user_name));
   } catch (e) {
     console.error(e);
