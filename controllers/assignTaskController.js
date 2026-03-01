@@ -78,7 +78,7 @@ export const getUniqueDoerNames = async (req, res) => {
     let query = `SELECT DISTINCT user_name
        FROM users 
        WHERE status='active'
-         AND LOWER(user_access) = LOWER($1)`;
+         AND LOWER(department) = LOWER($1)`;
     const params = [department];
 
     if (unit) {
