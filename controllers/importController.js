@@ -4,15 +4,15 @@ import pool from "../config/db.js";
 const sanitizeEnumValue = (value, defaultValue = 'no') => {
   // Handle null, undefined, or falsy values
   if (!value) return defaultValue;
-  
+
   // Convert to string safely
   const strValue = String(value).trim();
-  
+
   // Handle empty string or "NULL" string (case-insensitive)
   if (strValue === '' || strValue.toUpperCase() === 'NULL') {
     return defaultValue;
   }
-  
+
   // Return the value in lowercase for consistency
   return strValue.toLowerCase();
 };
@@ -21,15 +21,15 @@ const sanitizeEnumValue = (value, defaultValue = 'no') => {
 const sanitizeNullValue = (value) => {
   // Handle null, undefined, or falsy values
   if (!value) return null;
-  
+
   // Convert to string safely and check
   const strValue = String(value).trim();
-  
+
   // Handle empty string or "NULL" string (case-insensitive)
   if (strValue === '' || strValue.toUpperCase() === 'NULL') {
     return null;
   }
-  
+
   // Return the original value
   return value;
 };
@@ -113,21 +113,24 @@ const generateTaskDates = async (startDate, frequency, count = 365) => {
 };
 
 // Bulk import into checklist table (SMART IMPORT - generates recurring tasks)
+// TODO: For large CSV imports with daily frequency, the single bulk INSERT can exceed
+// PostgreSQL's ~65,535 parameter limit (~8-9 daily rows max). Add batched inserts
+// (e.g., 500 rows per batch) to handle larger imports safely.
 export const bulkImportChecklist = async (req, res) => {
   try {
     const tasks = req.body;
 
     if (!Array.isArray(tasks) || tasks.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid data: Expected array of tasks" 
+      return res.status(400).json({
+        success: false,
+        message: "Invalid data: Expected array of tasks"
       });
     }
 
     // Validate required fields for checklist
     const requiredFields = ['name', 'task_description'];
     const errors = [];
-    
+
     tasks.forEach((task, index) => {
       requiredFields.forEach(field => {
         if (!task[field]) {
@@ -137,10 +140,10 @@ export const bulkImportChecklist = async (req, res) => {
     });
 
     if (errors.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Validation errors", 
-        errors 
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors",
+        errors
       });
     }
 
@@ -148,19 +151,21 @@ export const bulkImportChecklist = async (req, res) => {
 
     // For each unique task definition, generate recurring task instances
     const allTaskInstances = [];
-    
+
     for (const taskDef of tasks) {
       const startDate = taskDef.task_start_date || new Date().toISOString().split('T')[0];
       const frequency = taskDef.frequency || 'daily';
-      
+
       // Generate task dates based on frequency and working calendar
       const taskDates = await generateTaskDates(startDate, frequency);
-      
+
       console.log(`📅 Task "${taskDef.task_description}" (${frequency}): Generating ${taskDates.length} instances`);
 
       // Create task instance for each date
       for (const date of taskDates) {
         const taskInstance = {
+          unit: taskDef.unit || null,
+          division: taskDef.division || null,
           department: taskDef.department || null,
           given_by: taskDef.given_by || null,
           name: taskDef.name,
@@ -177,7 +182,7 @@ export const bulkImportChecklist = async (req, res) => {
           task_start_date: date.toISOString(),
           submission_date: null
         };
-        
+
         allTaskInstances.push(taskInstance);
       }
     }
@@ -194,6 +199,8 @@ export const bulkImportChecklist = async (req, res) => {
       const placeholders = [];
 
       const columns = {
+        unit: task.unit,
+        division: task.division,
         department: task.department,
         given_by: task.given_by,
         name: task.name,
@@ -221,6 +228,7 @@ export const bulkImportChecklist = async (req, res) => {
     });
 
     const columnNames = [
+      'unit', 'division',
       'department', 'given_by', 'name', 'task_description',
       'enable_reminder', 'require_attachment', 'frequency',
       'remark', 'status', 'image', 'admin_done', 'delay',
@@ -246,10 +254,10 @@ export const bulkImportChecklist = async (req, res) => {
 
   } catch (error) {
     console.error("Bulk import checklist error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to import tasks", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Failed to import tasks",
+      error: error.message
     });
   }
 };
@@ -260,16 +268,16 @@ export const bulkImportDelegation = async (req, res) => {
     const tasks = req.body;
 
     if (!Array.isArray(tasks) || tasks.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid data: Expected array of tasks" 
+      return res.status(400).json({
+        success: false,
+        message: "Invalid data: Expected array of tasks"
       });
     }
 
     // Validate required fields for delegation
     const requiredFields = ['name', 'task_description'];
     const errors = [];
-    
+
     tasks.forEach((task, index) => {
       requiredFields.forEach(field => {
         if (!task[field]) {
@@ -279,10 +287,10 @@ export const bulkImportDelegation = async (req, res) => {
     });
 
     if (errors.length > 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Validation errors", 
-        errors 
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors",
+        errors
       });
     }
 
@@ -297,6 +305,8 @@ export const bulkImportDelegation = async (req, res) => {
 
       // Define column mapping (skip task_id and created_at as they're auto-generated)
       const columns = {
+        unit: task.unit || null,
+        division: task.division || null,
         department: task.department || null,
         given_by: task.given_by || null,
         name: task.name,
@@ -325,6 +335,7 @@ export const bulkImportDelegation = async (req, res) => {
     });
 
     const columnNames = [
+      'unit', 'division',
       'department', 'given_by', 'name', 'task_description',
       'enable_reminder', 'require_attachment', 'frequency',
       'remark', 'status', 'image', 'admin_done', 'delay',
@@ -348,10 +359,10 @@ export const bulkImportDelegation = async (req, res) => {
 
   } catch (error) {
     console.error("Bulk import delegation error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to import tasks", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Failed to import tasks",
+      error: error.message
     });
   }
 };

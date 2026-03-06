@@ -135,6 +135,7 @@ export const getChecklistHistory = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const username = req.query.username;
     const role = req.query.role;
+    const search = req.query.search;
 
     const limit = 50;
     const offset = (page - 1) * limit;
@@ -144,6 +145,21 @@ export const getChecklistHistory = async (req, res) => {
     // ⭐ Normal users see only their own tasks
     if (role !== "admin" && role !== "super_admin" && username) {
       where += ` AND LOWER(name) = LOWER('${username}') `;
+    }
+
+    const params = [limit, offset];
+
+    if (search) {
+      where += ` AND (
+        LOWER(name) LIKE $3 OR 
+        LOWER(task_description) LIKE $3 OR 
+        LOWER(department) LIKE $3 OR 
+        LOWER(given_by) LIKE $3 OR
+        CAST(task_id AS TEXT) LIKE $3 OR
+        LOWER(unit) LIKE $3 OR
+        LOWER(division) LIKE $3
+      )`;
+      params.push(`%${search.toLowerCase()}%`);
     }
 
     const query = `
@@ -168,21 +184,24 @@ export const getChecklistHistory = async (req, res) => {
         admin_done_remarks,
         unit,
         division,
-        COUNT(*) OVER() AS total_count
+        COUNT(*) OVER() AS total_count,
+        SUM(CASE WHEN admin_done = 'Done' THEN 1 ELSE 0 END) OVER() AS approved_count
       FROM checklist
       WHERE ${where}
       ORDER BY submission_date DESC
       LIMIT $1 OFFSET $2
     `;
 
-    const { rows } = await pool.query(query, [limit, offset]);
+    const { rows } = await pool.query(query, params);
 
-    const totalCount = rows.length > 0 ? rows[0].total_count : 0;
+    const totalCount = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
+    const approvedCount = rows.length > 0 ? parseInt(rows[0].approved_count) : 0;
 
     res.json({
       data: rows,
       page,
       totalCount,
+      approvedCount,
     });
   } catch (error) {
     console.error("❌ Error fetching history:", error);

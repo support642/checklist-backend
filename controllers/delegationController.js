@@ -133,9 +133,10 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
   const role = req.query.role;
   const username = req.query.username;
   const userAccess = req.query.user_access;
+  const search = req.query.search;
 
   try {
-    let query = `
+    let baseQuery = `
       SELECT 
         dd.id,
         dd.task_id,
@@ -157,74 +158,49 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         d.division
       FROM delegation_done dd
       LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
-      ORDER BY dd.created_at DESC;
     `;
+
+    let whereConditions = [];
+    const params = [];
+    let paramIndex = 1;
 
     // USER LEVEL FILTER
     if (role === "user") {
-      query = `
-        SELECT 
-          dd.id,
-          dd.task_id,
-          dd.status,
-          to_char(dd.next_extend_date, 'YYYY-MM-DD HH24:MI:SS') as next_extend_date,
-          dd.reason,
-          dd.image_url,
-          dd.name,
-          dd.task_description,
-          dd.given_by,
-          to_char(dd.created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-          dd.admin_done,
-          dd.admin_done_remarks,
-          to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
-          d.adminremarks,
-          d.department,
-          d.unit,
-          d.division
-        FROM delegation_done dd
-        LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
-        WHERE dd.name = '${username}'
-        ORDER BY dd.created_at DESC;
-      `;
+      whereConditions.push(`dd.name = $${paramIndex}`);
+      params.push(username);
+      paramIndex++;
     }
-
     // ADMIN FILTER — Fetch based on user_access departments
-    if ((role === "admin" || role === "super_admin") && userAccess) {
+    else if ((role === "admin" || role === "super_admin") && userAccess) {
       const depts = userAccess
         .replace(/\+/g, " ")
         .split(",")
         .map((d) => `'${d.trim().toLowerCase()}'`)
         .join(",");
-
-      query = `
-        SELECT 
-          dd.id,
-          dd.task_id,
-          dd.status,
-          to_char(dd.next_extend_date, 'YYYY-MM-DD HH24:MI:SS') as next_extend_date,
-          dd.reason,
-          dd.image_url,
-          dd.name,
-          dd.task_description,
-          dd.given_by,
-          to_char(dd.created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-          dd.admin_done,
-          dd.admin_done_remarks,
-          to_char(d.planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          to_char(d.submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
-          d.adminremarks,
-          d.department,
-          d.unit,
-          d.division
-        FROM delegation_done dd
-        LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
-        WHERE LOWER(d.department) IN (${depts})
-        ORDER BY dd.created_at DESC;
-      `;
+      whereConditions.push(`LOWER(d.department) IN (${depts})`);
     }
 
-    const { rows } = await pool.query(query);
+    if (search) {
+      whereConditions.push(`(
+        LOWER(dd.name) LIKE $${paramIndex} OR 
+        LOWER(dd.task_description) LIKE $${paramIndex} OR 
+        LOWER(d.department) LIKE $${paramIndex} OR 
+        LOWER(dd.given_by) LIKE $${paramIndex} OR
+        CAST(dd.task_id AS TEXT) LIKE $${paramIndex} OR
+        LOWER(d.unit) LIKE $${paramIndex} OR
+        LOWER(d.division) LIKE $${paramIndex}
+      )`);
+      params.push(`%${search.toLowerCase()}%`);
+      paramIndex++;
+    }
+
+    let query = baseQuery;
+    if (whereConditions.length > 0) {
+      query += ` WHERE ` + whereConditions.join(" AND ");
+    }
+    query += ` ORDER BY dd.created_at DESC;`;
+
+    const { rows } = await pool.query(query, params);
     return res.json(rows);
   } catch (err) {
     console.log("Done fetch error:", err);
