@@ -36,6 +36,13 @@ export const getDashboardData = async (req, res) => {
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
+    // Delegation and checklist tables have different column names:
+    // checklist: remark, admin_done, admin_done_remarks
+    // delegation: remarks, (no admin_done), adminremarks
+    const remarkCol = dashboardType === 'delegation' ? 'remarks' : 'remark';
+    const adminDoneCol = dashboardType === 'delegation' ? "NULL as admin_done" : 'admin_done';
+    const adminDoneRemarksCol = dashboardType === 'delegation' ? 'adminremarks as admin_done_remarks' : 'admin_done_remarks';
+
     let query = `
       SELECT 
         task_id,
@@ -46,16 +53,16 @@ export const getDashboardData = async (req, res) => {
         enable_reminder,
         require_attachment,
         frequency,
-        remark,
+        ${remarkCol} as remark,
         status,
         image,
-        admin_done,
+        ${adminDoneCol},
         delay,
         CASE WHEN planned_date IS NOT NULL THEN to_char(planned_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as planned_date,
         CASE WHEN created_at IS NOT NULL THEN to_char(created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as created_at,
         CASE WHEN task_start_date IS NOT NULL THEN to_char(task_start_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as task_start_date,
         CASE WHEN submission_date IS NOT NULL THEN to_char(submission_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as submission_date,
-        admin_done_remarks,
+        ${adminDoneRemarksCol},
         ${table}.task_start_date as task_start_date_original
       FROM ${table} 
       WHERE 1=1
