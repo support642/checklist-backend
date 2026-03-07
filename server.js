@@ -70,6 +70,7 @@ import holidayRoutes from "./routes/holidayRoutes.js";
 import workingDayRoutes from "./routes/workingDayRoutes.js";
 import importRoutes from "./routes/importRoutes.js";
 import leaveRoutes from "./routes/leaveRoutes.js";
+import maintenanceRoutes from "./routes/maintenanceRoutes.js";
 
 dotenv.config();
 
@@ -94,6 +95,7 @@ app.use("/api/holidays", holidayRoutes);
 app.use("/api/working-days", workingDayRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/leave", leaveRoutes);
+app.use("/api/maintenance", maintenanceRoutes);
 
 // SERVER RUN
 const PORT = process.env.PORT || 5000;

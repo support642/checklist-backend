@@ -144,10 +144,84 @@ export const postAssignTasks = async (req, res) => {
       imageUrl = await uploadToS3(req.file);
     }
 
+    const taskType = tasks[0].taskType;
     const isOneTime = tasks[0].frequency === "one-time";
-    const table = isOneTime ? "delegation" : "checklist";
 
-    if (isOneTime) {
+    // Check if it's explicitly a maintenance task
+    if (taskType === "maintenance") {
+      // ----- MAINTENANCE INSERT -----
+
+      // Resolve machine_parts data if machinePartId is provided
+      const machinePartId = tasks[0].machinePartId || null;
+      let resolvedMachineName = tasks[0].machineName || null;
+      let resolvedPartName = tasks[0].partName || null;
+      let resolvedPartArea = tasks[0].partArea || null;
+
+      if (machinePartId) {
+        const mpResult = await pool.query(
+          `SELECT machine_name, part_name, machine_area FROM machine_parts WHERE id = $1`,
+          [machinePartId]
+        );
+        if (mpResult.rows.length > 0) {
+          resolvedMachineName = mpResult.rows[0].machine_name;
+          resolvedPartName = mpResult.rows[0].part_name;
+          resolvedPartArea = mpResult.rows[0].machine_area;
+        }
+      }
+
+      const values = [];
+      const params = [];
+
+      tasks.forEach((t, i) => {
+        const startDate = t.taskStartDate || t.startDate || t.dueDate;
+
+        values.push(
+          `($${i * 21 + 1}, $${i * 21 + 2}, $${i * 21 + 3}, $${i * 21 + 4}, $${i * 21 + 5},
+            $${i * 21 + 6}, $${i * 21 + 7}, $${i * 21 + 8}, $${i * 21 + 9}, $${i * 21 + 10},
+            $${i * 21 + 11}, $${i * 21 + 12}, $${i * 21 + 13}, $${i * 21 + 14}, $${i * 21 + 15},
+            $${i * 21 + 16}, $${i * 21 + 17}, $${i * 21 + 18}, $${i * 21 + 19}, $${i * 21 + 20},
+            $${i * 21 + 21})`
+        );
+
+        params.push(
+          t.department,                        // 1
+          t.givenBy,                           // 2
+          t.doer,                              // 3 (name)
+          t.description,                       // 4 (task_description)
+          t.enableReminders ? true : false,    // 5 (enable_reminders)
+          t.requireAttachment ? "yes" : "no",  // 6 (require_attachment)
+          t.frequency,                         // 7
+          null,                                // 8 remarks
+          "Pending",                           // 9 status
+          imageUrl,                            // 10 uploaded_image_url
+          false,                               // 11 admin_done
+          startDate,                           // 12 planned_date
+          startDate,                           // 13 task_start_date
+          null,                                // 14 submission_date
+          t.unit || null,                      // 15 unit
+          t.division || null,                  // 16 division
+          resolvedMachineName,                 // 17 machine_name (from machine_parts lookup)
+          resolvedPartName,                    // 18 part_name (from machine_parts lookup)
+          resolvedPartArea,                    // 19 part_area (from machine_parts lookup)
+          machinePartId,                       // 20 machine_part_id (FK)
+          t.duration || null                   // 21 duration
+        );
+      });
+
+      const result = await pool.query(
+        `INSERT INTO maintenance_tasks 
+        (department, given_by, name, task_description, enable_reminders,
+         require_attachment, frequency, remarks, status, uploaded_image_url, admin_done,
+         planned_date, task_start_date, submission_date, unit, division, machine_name, part_name, part_area, machine_part_id, duration)
+        VALUES ${values.join(",")}
+        RETURNING id AS task_id`,
+        params
+      );
+
+      // Store the first inserted task_id for WhatsApp notification
+      var insertedTaskId = result.rows.length > 0 ? result.rows[0].task_id : null;
+
+    } else if (isOneTime) {
       // ----- DELEGATION INSERT -----
       const values = [];
       const params = [];

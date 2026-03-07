@@ -9,7 +9,11 @@ import {
   getDepartmentsOnly,
   getGivenByData,
   createDepartment,
-  updateDepartment
+  updateDepartment,
+  getMachines,
+  createMachine,
+  updateMachine,
+  deleteMachine
 } from "../controllers/settingController.js";
 
 const router = express.Router();
@@ -26,5 +30,11 @@ router.get("/departments-only", getDepartmentsOnly); // Gets only unique departm
 router.get("/given-by", getGivenByData); // Gets only unique given_by values
 router.post("/departments", createDepartment);
 router.put("/departments/:id", updateDepartment);
+
+// MACHINES
+router.get("/machines", getMachines);
+router.post("/machines", createMachine);
+router.put("/machines/:id", updateMachine);
+router.delete("/machines/:id", deleteMachine);
 
 export default router;

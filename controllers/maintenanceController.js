@@ -1,0 +1,509 @@
+import pool from "../config/db.js";
+import { uploadToS3 } from "../middleware/s3Upload.js";
+import { sendWhatsAppMessage } from "../services/whatsappService.js";
+
+// -----------------------------------------
+// 1️⃣ GET PENDING MAINTENANCE TASKS
+// -----------------------------------------
+export const getPendingMaintenanceTasks = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const username = req.query.username;
+        const role = req.query.role;
+        const search = req.query.search || "";
+
+        const limit = 50;
+        const offset = (page - 1) * limit;
+
+        // Show pending tasks including future tasks up to 1 year ahead
+        let where = `
+      t.submission_date IS NULL
+      AND DATE(t.task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
+    `;
+
+        // ⭐ If user is NOT admin → filter by name
+        if (role !== "admin" && role !== "super_admin" && username) {
+            where += ` AND LOWER(t.name) = LOWER('${username}') `;
+        }
+
+        // ⭐ Add search filter if search term is provided
+        if (search.trim()) {
+            const searchLower = search.toLowerCase().replace(/'/g, "''");
+            where += ` AND (
+        LOWER(t.name) LIKE '%${searchLower}%' OR
+        LOWER(t.task_description) LIKE '%${searchLower}%' OR
+        LOWER(t.department) LIKE '%${searchLower}%' OR
+        LOWER(t.given_by) LIKE '%${searchLower}%' OR
+        LOWER(COALESCE(mp.machine_name, t.machine_name)) LIKE '%${searchLower}%' OR
+        LOWER(COALESCE(mp.part_name, t.part_name)) LIKE '%${searchLower}%' OR
+        CAST(t.id AS TEXT) LIKE '%${searchLower}%'
+      ) `;
+        }
+
+        const query = `
+      SELECT 
+        t.id as task_id,
+        t.department,
+        t.unit,
+        t.division,
+        t.given_by,
+        t.name,
+        t.task_description,
+        TO_CHAR(t.task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
+        t.frequency,
+        t.enable_reminders,
+        t.require_attachment,
+        t.submission_date::text as submission_date,
+        t.delay,
+        t.status,
+        TO_CHAR(t.planned_date, 'HH24:MI') as time,
+        t.remarks as remark,
+        t.uploaded_image_url as image,
+        t.admin_done,
+        COALESCE(mp.machine_name, t.machine_name) as machine_name,
+        COALESCE(mp.part_name, t.part_name) as part_name,
+        COALESCE(mp.machine_area, t.part_area) as part_area,
+        t.duration,
+        TO_CHAR(t.planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date,
+        t.created_at::text as created_at,
+        t.machine_part_id,
+        COUNT(*) OVER() AS total_count
+      FROM maintenance_tasks t
+      LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
+      WHERE ${where}
+      ORDER BY t.task_start_date ASC
+      LIMIT $1 OFFSET $2
+    `;
+
+        const { rows } = await pool.query(query, [limit, offset]);
+
+        const totalCount = rows.length > 0 ? rows[0].total_count : 0;
+
+        res.json({
+            data: rows,
+            page,
+            totalCount,
+        });
+    } catch (error) {
+        console.error("❌ Error fetching pending maintenance tasks:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+// -----------------------------------------
+// 2️⃣ GET HISTORY MAINTENANCE TASKS
+// -----------------------------------------
+export const getMaintenanceHistory = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const username = req.query.username;
+        const role = req.query.role;
+        const search = req.query.search;
+
+        const limit = 50;
+        const offset = (page - 1) * limit;
+
+        let where = `t.submission_date IS NOT NULL`;
+
+        // ⭐ Normal users see only their own tasks
+        if (role !== "admin" && role !== "super_admin" && username) {
+            where += ` AND LOWER(t.name) = LOWER('${username}') `;
+        }
+
+        const params = [limit, offset];
+
+        if (search) {
+            where += ` AND (
+        LOWER(t.name) LIKE $3 OR 
+        LOWER(t.task_description) LIKE $3 OR 
+        LOWER(t.department) LIKE $3 OR 
+        LOWER(t.given_by) LIKE $3 OR
+        LOWER(COALESCE(mp.machine_name, t.machine_name)) LIKE $3 OR
+        LOWER(COALESCE(mp.part_name, t.part_name)) LIKE $3 OR
+        CAST(t.id AS TEXT) LIKE $3 OR
+        LOWER(t.unit) LIKE $3 OR
+        LOWER(t.division) LIKE $3
+      )`;
+            params.push(`%${search.toLowerCase()}%`);
+        }
+
+        const query = `
+      SELECT 
+        t.id as task_id,
+        t.department,
+        t.unit,
+        t.division,
+        t.given_by,
+        t.name,
+        t.task_description,
+        TO_CHAR(t.task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
+        t.frequency,
+        t.enable_reminders,
+        t.require_attachment,
+        t.submission_date::text as submission_date,
+        t.delay,
+        t.status,
+        TO_CHAR(t.planned_date, 'HH24:MI') as time,
+        t.remarks as remark,
+        t.uploaded_image_url as image,
+        t.admin_done,
+        COALESCE(mp.machine_name, t.machine_name) as machine_name,
+        COALESCE(mp.part_name, t.part_name) as part_name,
+        COALESCE(mp.machine_area, t.part_area) as part_area,
+        t.duration,
+        t.planned_date::text as planned_date,
+        t.created_at::text as created_at,
+        t.machine_part_id,
+        COUNT(*) OVER() AS total_count,
+        SUM(CASE WHEN t.admin_done IS NOT NULL AND t.admin_done != '' THEN 1 ELSE 0 END) OVER() AS approved_count
+      FROM maintenance_tasks t
+      LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
+      WHERE ${where}
+      ORDER BY t.submission_date DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+        const { rows } = await pool.query(query, params);
+
+        const totalCount = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
+        const approvedCount = rows.length > 0 ? parseInt(rows[0].approved_count) : 0;
+
+        res.json({
+            data: rows,
+            page,
+            totalCount,
+            approvedCount,
+        });
+    } catch (error) {
+        console.error("❌ Error fetching history:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+// -----------------------------------------
+// 3️⃣ UPDATE MAINTENANCE TASKS (User Submit)
+// -----------------------------------------
+export const updateMaintenanceTasks = async (req, res) => {
+    try {
+        const items = req.body;
+
+        if (!Array.isArray(items) || items.length === 0)
+            return res.status(400).json({ error: "Invalid data" });
+
+        const client = await pool.connect();
+
+        try {
+            await client.query("BEGIN");
+
+            for (const item of items) {
+                // 🔥 Fix status
+                const safeStatus =
+                    (item.status || "").toLowerCase() === "yes" ? "yes" : "no";
+
+                // ---------------------------------
+                // 🔥🔥 IMAGE HANDLING
+                // ---------------------------------
+                let finalImageUrl = null;
+
+                if (item.image && typeof item.image === "string") {
+                    if (item.image.startsWith("data:image")) {
+                        // Base64 → Buffer
+                        const base64Data = item.image.split(";base64,").pop();
+                        const buffer = Buffer.from(base64Data, "base64");
+
+                        const fakeFile = {
+                            originalname: `maint_task_${item.taskId}_${Date.now()}.jpg`,
+                            buffer,
+                            mimetype: "image/jpeg",
+                        };
+
+                        // Upload to S3
+                        finalImageUrl = await uploadToS3(fakeFile);
+                    } else {
+                        // Already S3 URL or old string
+                        finalImageUrl = item.image;
+                    }
+                }
+
+                // ---------------------------------
+                // 🔥 SAVE TO DATABASE
+                // ---------------------------------
+                const sql = `
+          UPDATE maintenance_tasks
+          SET 
+            status = $1,
+            remarks = $2,
+            submission_date = date_trunc('second', NOW() AT TIME ZONE 'Asia/Kolkata'),
+            uploaded_image_url = $3
+          WHERE id = $4
+        `;
+
+                await client.query(sql, [
+                    safeStatus,
+                    item.remarks || "",
+                    finalImageUrl,
+                    item.taskId,
+                ]);
+            }
+
+            await client.query("COMMIT");
+            res.json({ message: "Maintenance tasks updated successfully" });
+        } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("❌ updateMaintenanceTasks Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// -----------------------------------------
+// 4️⃣ ADMIN DONE UPDATE
+// -----------------------------------------
+export const adminDoneMaintenance = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const items = req.body;
+
+        if (!items || items.length === 0)
+            return res.status(400).json({ error: "No items provided" });
+
+        await client.query("BEGIN");
+
+        const sql = `
+      UPDATE maintenance_tasks
+      SET admin_done = true
+      WHERE id = $1
+    `;
+
+        for (const item of items) {
+            // item must have task_id
+            await client.query(sql, [item.task_id]);
+        }
+
+        await client.query("COMMIT");
+
+        res.json({ message: "Admin updated successfully" });
+    } catch (err) {
+        await client.query("ROLLBACK");
+        console.error("❌ adminDoneMaintenance Error:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+};
+
+// -----------------------------------------
+// 5️⃣ GET DISTINCT DROPDOWN OPTIONS
+// -----------------------------------------
+export const getMaintenanceDropdownOptions = async (req, res) => {
+    try {
+        const machineNamesQuery = `SELECT DISTINCT machine_name FROM maintenance_tasks WHERE machine_name IS NOT NULL AND machine_name != '' ORDER BY machine_name`;
+        const partNamesQuery = `SELECT DISTINCT part_name FROM maintenance_tasks WHERE part_name IS NOT NULL AND part_name != '' ORDER BY part_name`;
+        const partAreasQuery = `SELECT DISTINCT part_area FROM maintenance_tasks WHERE part_area IS NOT NULL AND part_area != '' ORDER BY part_area`;
+
+        const [machineNames, partNames, partAreas] = await Promise.all([
+            pool.query(machineNamesQuery),
+            pool.query(partNamesQuery),
+            pool.query(partAreasQuery),
+        ]);
+
+        res.json({
+            machineNames: machineNames.rows.map(r => r.machine_name),
+            partNames: partNames.rows.map(r => r.part_name),
+            partAreas: partAreas.rows.map(r => r.part_area),
+        });
+    } catch (error) {
+        console.error("❌ Error fetching dropdown options:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+// -----------------------------------------
+// 6️⃣ GET UNIQUE MAINTENANCE TASKS
+// -----------------------------------------
+export const getUniqueMaintenanceTasks = async (req, res) => {
+    try {
+        const page = parseInt(req.body.page) || 0;
+        const pageSize = parseInt(req.body.pageSize) || 50;
+        const nameFilter = req.body.nameFilter || "";
+
+        const offset = page * pageSize;
+        const params = [];
+        let paramIndex = 1;
+
+        let whereClause = "t.submission_date IS NULL AND DATE(t.task_start_date) <= CURRENT_DATE + INTERVAL '365 days'";
+
+        if (nameFilter) {
+            whereClause += ` AND LOWER(t.name) = LOWER($${paramIndex++})`;
+            params.push(nameFilter);
+        }
+
+        const dataQuery = `
+          SELECT DISTINCT ON (LOWER(t.name), LOWER(t.task_description))
+            t.id as task_id,
+            t.department,
+            t.unit,
+            t.division,
+            t.given_by,
+            t.name,
+            t.task_description,
+            TO_CHAR(t.task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
+            t.frequency,
+            t.enable_reminders as enable_reminder,
+            t.require_attachment,
+            t.submission_date::text as submission_date,
+            t.delay,
+            t.status,
+            TO_CHAR(t.planned_date, 'HH24:MI') as time,
+            t.remarks as remark,
+            t.uploaded_image_url as image,
+            t.admin_done,
+            COALESCE(mp.machine_name, t.machine_name) as machine_name,
+            COALESCE(mp.part_name, t.part_name) as part_name,
+            COALESCE(mp.machine_area, t.part_area) as part_area,
+            t.duration,
+            TO_CHAR(t.planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date,
+            t.created_at::text as created_at,
+            t.machine_part_id
+          FROM maintenance_tasks t
+          LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
+          WHERE ${whereClause}
+          ORDER BY LOWER(t.name), LOWER(t.task_description), t.task_start_date ASC
+          LIMIT $${paramIndex++}
+          OFFSET $${paramIndex}
+        `;
+
+        const dataParams = [...params, pageSize, offset];
+
+        const countQuery = `
+          SELECT COUNT(*) FROM (
+            SELECT DISTINCT ON (LOWER(t.name), LOWER(t.task_description))
+              t.name, t.task_description
+            FROM maintenance_tasks t
+            LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
+            WHERE ${whereClause}
+          ) AS unique_tasks
+        `;
+
+        const [dataRes, countRes] = await Promise.all([
+            pool.query(dataQuery, dataParams),
+            pool.query(countQuery, params),
+        ]);
+
+        const total = parseInt(countRes.rows[0]?.count ?? 0, 10);
+        res.json({ data: dataRes.rows, total });
+
+    } catch (err) {
+        console.error("❌ Error fetching unique maintenance tasks:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+// -----------------------------------------
+// 7️⃣ DELETE UNIQUE MAINTENANCE TASKS
+// -----------------------------------------
+export const deleteUniqueMaintenanceTasks = async (req, res) => {
+    try {
+        const { tasks } = req.body;
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+            return res.status(400).json({ error: "No tasks provided" });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            for (const t of tasks) {
+                await client.query(
+                    `
+                    DELETE FROM maintenance_tasks
+                    WHERE name = $1
+                    AND task_description = $2
+                    AND submission_date IS NULL
+                    `,
+                    [t.name, t.task_description]
+                );
+            }
+            await client.query("COMMIT");
+            res.json({ message: "Tasks deleted successfully" });
+        } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error("❌ deleteUniqueMaintenanceTasks Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// -----------------------------------------
+// 8️⃣ UPDATE UNIQUE MAINTENANCE TASKS
+// -----------------------------------------
+export const updateUniqueMaintenanceTask = async (req, res) => {
+    try {
+        const { updatedTask, originalTask } = req.body;
+
+        if (!updatedTask || !originalTask) {
+            return res.status(400).json({ error: "Missing task data" });
+        }
+
+        const query = `
+          UPDATE maintenance_tasks
+          SET
+            name = $1,
+            department = $2,
+            unit = $3,
+            division = $4,
+            given_by = $5,
+            task_description = $6,
+            enable_reminders = $7,
+            require_attachment = $8,
+            machine_name = $9,
+            part_name = $10,
+            part_area = $11
+          WHERE name = $12
+          AND task_description = $13
+          AND submission_date IS NULL
+          RETURNING *
+        `;
+
+        // Update all tasks matching the original name and description
+        const values = [
+            updatedTask.name,
+            updatedTask.department,
+            updatedTask.unit,
+            updatedTask.division,
+            updatedTask.given_by,
+            updatedTask.task_description,
+            updatedTask.enable_reminder,  // The frontend passes enable_reminder
+            updatedTask.require_attachment,
+            updatedTask.machine_name,     // specific to maintenance task edits
+            updatedTask.part_name,
+            updatedTask.part_area,
+            originalTask.name,
+            originalTask.task_description
+        ];
+
+        const { rows } = await pool.query(query, values);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "No tasks found to update" });
+        }
+
+        // Return the first updated row to represent the unique group on the frontend
+        res.json({
+            ...rows[0],
+            task_id: rows[0].id,
+            enable_reminder: rows[0].enable_reminders
+        });
+
+    } catch (error) {
+        console.error("❌ Error updating unique maintenance tasks:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
