@@ -465,9 +465,11 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             require_attachment = $8,
             machine_name = $9,
             part_name = $10,
-            part_area = $11
-          WHERE name = $12
-          AND task_description = $13
+            part_area = $11,
+            duration = $12,
+            status = $13
+          WHERE name = $14
+          AND task_description = $15
           AND submission_date IS NULL
           RETURNING *
         `;
@@ -485,6 +487,8 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             updatedTask.machine_name,     // specific to maintenance task edits
             updatedTask.part_name,
             updatedTask.part_area,
+            updatedTask.duration,
+            updatedTask.status || originalTask.status, // Fallback if status is empty string from "Select Status" option
             originalTask.name,
             originalTask.task_description
         ];

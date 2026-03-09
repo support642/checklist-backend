@@ -298,20 +298,16 @@ export const getMachines = async (req, res) => {
 
 
 /*******************************
- * 11) CREATE MACHINE
+ * 11) CREATE MACHINE(S)
  *******************************/
 export const createMachine = async (req, res) => {
   try {
     const { machine_name, part_name, machine_area } = req.body;
-
-    const result = await pool.query(`
-      INSERT INTO machine_parts (machine_name, part_name, machine_area)
-      VALUES ($1, $2, $3)
-      RETURNING *
-    `, [machine_name || null, part_name || null, machine_area || null]);
-
+    const result = await pool.query(
+      "INSERT INTO machine_parts (machine_name, part_name, machine_area) VALUES ($1, $2, $3) RETURNING *",
+      [machine_name || null, part_name || null, machine_area || null]
+    );
     res.json(result.rows[0]);
-
   } catch (error) {
     console.error("❌ Error creating machine:", error);
     res.status(500).json({ error: "Database error" });
@@ -326,16 +322,11 @@ export const updateMachine = async (req, res) => {
   try {
     const { id } = req.params;
     const { machine_name, part_name, machine_area } = req.body;
-
-    const result = await pool.query(`
-      UPDATE machine_parts
-      SET machine_name = $1, part_name = $2, machine_area = $3
-      WHERE id = $4
-      RETURNING *
-    `, [machine_name || null, part_name || null, machine_area || null, id]);
-
+    const result = await pool.query(
+      "UPDATE machine_parts SET machine_name = $1, part_name = $2, machine_area = $3 WHERE id = $4 RETURNING *",
+      [machine_name || null, part_name || null, machine_area || null, id]
+    );
     res.json(result.rows[0]);
-
   } catch (error) {
     console.error("❌ Error updating machine:", error);
     res.status(500).json({ error: "Database error" });
