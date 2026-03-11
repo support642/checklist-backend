@@ -7,7 +7,8 @@ export const getStaffTasks = async (req, res) => {
       staffFilter = "all",
       page = 1,
       limit = 50,
-      monthYear = "" // Add this parameter
+      monthYear = "",
+      tillDate = ""
     } = req.query;
 
     const table = dashboardType;
@@ -36,8 +37,13 @@ export const getStaffTasks = async (req, res) => {
       const [year, month] = monthYear.split('-').map(Number);
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
-      
+
       staffQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
+    }
+
+    // Add till-date filter if provided (independent of month filter)
+    if (tillDate) {
+      staffQuery += ` AND task_start_date <= '${tillDate} 23:59:59'`;
     }
 
     if (staffFilter !== "all") {
@@ -96,10 +102,15 @@ export const getStaffTasks = async (req, res) => {
         const [year, month] = monthYear.split('-').map(Number);
         const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
         const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-        
+
         taskQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
       } else {
         taskQuery += ` AND task_start_date <= NOW()`;
+      }
+
+      // Add till-date filter to task query if provided
+      if (tillDate) {
+        taskQuery += ` AND task_start_date <= '${tillDate} 23:59:59'`;
       }
 
       const taskResult = await pool.query(taskQuery);
@@ -108,7 +119,7 @@ export const getStaffTasks = async (req, res) => {
       const doneOnTime = Number(taskResult.rows[0].done_on_time) || 0;
       const avgDelayDays = Number(taskResult.rows[0].avg_delay_days) || 0;
       const pending = total - completed;
-      
+
       // Calculate on-time score as negative percentage
       let onTimeScore = 0;
       if (avgDelayDays > 0) {

@@ -15,6 +15,7 @@ router.post("/checklist", async (req, res) => {
     req.body.page,
     req.body.pageSize,
     req.body.nameFilter,
+    req.body.freqFilter,
     req.body.startDate,
     req.body.endDate
   );
@@ -26,6 +27,7 @@ router.post("/delegation", async (req, res) => {
     req.body.page,
     req.body.pageSize,
     req.body.nameFilter,
+    req.body.freqFilter,
     req.body.startDate,
     req.body.endDate
   );

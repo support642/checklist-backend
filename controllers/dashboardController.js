@@ -361,11 +361,11 @@ export const getNotDoneTask = async (req, res) => {
     }
 
     if (dashboardType === "checklist" && unitFilter && unitFilter !== "all") {
-      query += ` AND unit = '${unitFilter}'`;
+      query += ` AND LOWER(unit) = LOWER('${unitFilter}')`;
     }
 
     if (dashboardType === "checklist" && divisionFilter && divisionFilter !== "all") {
-      query += ` AND division = '${divisionFilter}'`;
+      query += ` AND LOWER(division) = LOWER('${divisionFilter}')`;
     }
 
     const result = await pool.query(query);

@@ -159,15 +159,19 @@ export const postAssignTasks = async (req, res) => {
 
       if (machinePartId) {
         const mpResult = await pool.query(
-          `SELECT machine_name, part_name, machine_area FROM machine_parts WHERE id = $1`,
+          `SELECT machine_name, machine_area, machine_department, machine_division FROM machine_parts WHERE id = $1`,
           [machinePartId]
         );
         if (mpResult.rows.length > 0) {
           resolvedMachineName = mpResult.rows[0].machine_name;
-          resolvedPartName = mpResult.rows[0].part_name;
           resolvedPartArea = mpResult.rows[0].machine_area;
+          var resolvedMachineDept = mpResult.rows[0].machine_department;
+          var resolvedMachineDiv = mpResult.rows[0].machine_division;
         }
       }
+
+      // Use partName directly (should be an array from frontend)
+      resolvedPartName = tasks[0].partName || [];
 
       const values = [];
       const params = [];
@@ -176,11 +180,11 @@ export const postAssignTasks = async (req, res) => {
         const startDate = t.taskStartDate || t.startDate || t.dueDate;
 
         values.push(
-          `($${i * 21 + 1}, $${i * 21 + 2}, $${i * 21 + 3}, $${i * 21 + 4}, $${i * 21 + 5},
-            $${i * 21 + 6}, $${i * 21 + 7}, $${i * 21 + 8}, $${i * 21 + 9}, $${i * 21 + 10},
-            $${i * 21 + 11}, $${i * 21 + 12}, $${i * 21 + 13}, $${i * 21 + 14}, $${i * 21 + 15},
-            $${i * 21 + 16}, $${i * 21 + 17}, $${i * 21 + 18}, $${i * 21 + 19}, $${i * 21 + 20},
-            $${i * 21 + 21})`
+          `($${i * 23 + 1}, $${i * 23 + 2}, $${i * 23 + 3}, $${i * 23 + 4}, $${i * 23 + 5},
+            $${i * 23 + 6}, $${i * 23 + 7}, $${i * 23 + 8}, $${i * 23 + 9}, $${i * 23 + 10},
+            $${i * 23 + 11}, $${i * 23 + 12}, $${i * 23 + 13}, $${i * 23 + 14}, $${i * 23 + 15},
+            $${i * 23 + 16}, $${i * 23 + 17}, $${i * 23 + 18}, $${i * 23 + 19}, $${i * 23 + 20},
+            $${i * 23 + 21}, $${i * 23 + 22}, $${i * 23 + 23})`
         );
 
         params.push(
@@ -200,11 +204,13 @@ export const postAssignTasks = async (req, res) => {
           null,                                // 14 submission_date
           t.unit || null,                      // 15 unit
           t.division || null,                  // 16 division
-          resolvedMachineName,                 // 17 machine_name (from machine_parts lookup)
-          resolvedPartName,                    // 18 part_name (from machine_parts lookup)
-          resolvedPartArea,                    // 19 part_area (from machine_parts lookup)
+          resolvedMachineName,                 // 17
+          resolvedPartName,                    // 18
+          resolvedPartArea,                    // 19
           machinePartId,                       // 20 machine_part_id (FK)
-          t.duration || null                   // 21 duration
+          t.duration || null,                  // 21 duration
+          resolvedMachineDept || t.machine_department || null, // 22 machine_department
+          resolvedMachineDiv || t.machine_division || null    // 23 machine_division
         );
       });
 
@@ -212,7 +218,7 @@ export const postAssignTasks = async (req, res) => {
         `INSERT INTO maintenance_tasks 
         (department, given_by, name, task_description, enable_reminders,
          require_attachment, frequency, remarks, status, uploaded_image_url, admin_done,
-         planned_date, task_start_date, submission_date, unit, division, machine_name, part_name, part_area, machine_part_id, duration)
+         planned_date, task_start_date, submission_date, unit, division, machine_name, part_name, part_area, machine_part_id, duration, machine_department, machine_division)
         VALUES ${values.join(",")}
         RETURNING id AS task_id`,
         params

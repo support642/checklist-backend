@@ -302,10 +302,14 @@ export const getMachines = async (req, res) => {
  *******************************/
 export const createMachine = async (req, res) => {
   try {
-    const { machine_name, part_name, machine_area } = req.body;
+    const data = req.body;
+
+    const { machine_name, part_name, machine_area, machine_department, machine_division } = data;
+    // Ensure part_name is an array (backward compatible: wrap string in array)
+    const partNameArray = Array.isArray(part_name) ? part_name : (part_name ? [part_name] : []);
     const result = await pool.query(
-      "INSERT INTO machine_parts (machine_name, part_name, machine_area) VALUES ($1, $2, $3) RETURNING *",
-      [machine_name || null, part_name || null, machine_area || null]
+      "INSERT INTO machine_parts (machine_name, part_name, machine_area, machine_department, machine_division) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [machine_name || null, partNameArray, machine_area || null, machine_department || null, machine_division || null]
     );
     res.json(result.rows[0]);
   } catch (error) {
@@ -321,10 +325,12 @@ export const createMachine = async (req, res) => {
 export const updateMachine = async (req, res) => {
   try {
     const { id } = req.params;
-    const { machine_name, part_name, machine_area } = req.body;
+    const { machine_name, part_name, machine_area, machine_department, machine_division } = req.body;
+    // Ensure part_name is an array (backward compatible: wrap string in array)
+    const partNameArray = Array.isArray(part_name) ? part_name : (part_name ? [part_name] : []);
     const result = await pool.query(
-      "UPDATE machine_parts SET machine_name = $1, part_name = $2, machine_area = $3 WHERE id = $4 RETURNING *",
-      [machine_name || null, part_name || null, machine_area || null, id]
+      "UPDATE machine_parts SET machine_name = $1, part_name = $2, machine_area = $3, machine_department = $4, machine_division = $5 WHERE id = $6 RETURNING *",
+      [machine_name || null, partNameArray, machine_area || null, machine_department || null, machine_division || null, id]
     );
     res.json(result.rows[0]);
   } catch (error) {

@@ -366,3 +366,165 @@ export const bulkImportDelegation = async (req, res) => {
     });
   }
 };
+
+// Bulk import into maintenance_tasks table
+export const bulkImportMaintenance = async (req, res) => {
+  try {
+    const tasks = req.body;
+
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid data: Expected array of tasks"
+      });
+    }
+
+    // Validate required fields for maintenance
+    const requiredFields = ['unit', 'division', 'department', 'name', 'task_description', 'machine_name', 'part_name', 'machine_area', 'frequency', 'planned_date', 'machine_department', 'machine_division'];
+    const errors = [];
+
+    tasks.forEach((task, index) => {
+      requiredFields.forEach(field => {
+        if (!task[field]) {
+          errors.push(`Row ${index + 1}: Missing required field '${field}'`);
+        }
+      });
+    });
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors",
+        errors
+      });
+    }
+
+    console.log(`📥 Importing ${tasks.length} maintenance task definitions...`);
+
+    const allTaskInstances = [];
+
+    for (const taskDef of tasks) {
+      const startDate = taskDef.planned_date;
+      const frequency = taskDef.frequency || 'daily';
+
+      // Parse part_name: CSV may have comma-separated values like "gear,motor,belt"
+      const partNameArray = typeof taskDef.part_name === 'string'
+        ? taskDef.part_name.split(',').map(p => p.trim()).filter(Boolean)
+        : (Array.isArray(taskDef.part_name) ? taskDef.part_name : []);
+
+      // Attempt to look up machine_part_id using array overlap
+      const mpResult = await pool.query(
+        `SELECT id FROM machine_parts 
+         WHERE LOWER(machine_name) = LOWER($1) 
+         AND part_name && $2
+         AND LOWER(machine_area) = LOWER($3) 
+         LIMIT 1`,
+        [taskDef.machine_name, partNameArray, taskDef.machine_area]
+      );
+      const machinePartId = mpResult.rows.length > 0 ? mpResult.rows[0].id : null;
+
+      // Generate task dates based on frequency and working calendar
+      const taskDates = await generateTaskDates(startDate, frequency);
+
+      // Create task instance for each date
+      for (const date of taskDates) {
+        const taskTime = taskDef.time || '00:00';
+        const dateStr = date.toISOString().split('T')[0];
+        const combinedPlannedDate = `${dateStr} ${taskTime}:00`;
+
+        const taskInstance = {
+          unit: taskDef.unit || null,
+          division: taskDef.division || null,
+          department: taskDef.department || null,
+          given_by: taskDef.given_by || null,
+          name: taskDef.name,
+          task_description: taskDef.task_description,
+          enable_reminders: sanitizeEnumValue(taskDef.enable_reminder, 'no') === 'yes',
+          require_attachment: sanitizeEnumValue(taskDef.require_attachment, 'no'),
+          frequency: taskDef.frequency || null,
+          remarks: taskDef.remark || null,
+          status: 'Pending',
+          uploaded_image_url: null,
+          admin_done: null,
+          planned_date: combinedPlannedDate,
+          task_start_date: date.toISOString(),
+          submission_date: null,
+          machine_name: taskDef.machine_name,
+          part_name: partNameArray,
+          part_area: taskDef.machine_area,
+          machine_part_id: machinePartId,
+          duration: taskDef.duration || null,
+          machine_department: taskDef.machine_department || null,
+          machine_division: taskDef.machine_division || null
+        };
+
+        allTaskInstances.push(taskInstance);
+      }
+    }
+
+    // Build and execute dynamic INSERT queries in batches
+    const columnNames = [
+      'unit', 'division', 'department', 'given_by', 'name',
+      'task_description', 'enable_reminders', 'require_attachment',
+      'frequency', 'remarks', 'status', 'uploaded_image_url',
+      'admin_done', 'planned_date', 'task_start_date',
+      'submission_date', 'machine_name', 'part_name',
+      'part_area', 'machine_part_id', 'duration',
+      'machine_department', 'machine_division'
+    ];
+
+    const BATCH_SIZE = 100; // Number of task instances per batch
+    const insertedIds = [];
+
+    for (let i = 0; i < allTaskInstances.length; i += BATCH_SIZE) {
+      const batch = allTaskInstances.slice(i, i + BATCH_SIZE);
+      const values = [];
+      const params = [];
+      let paramIndex = 1;
+
+      batch.forEach((task) => {
+        const placeholders = [];
+        const columns = [
+          task.unit, task.division, task.department, task.given_by, task.name,
+          task.task_description, task.enable_reminders, task.require_attachment,
+          task.frequency, task.remarks, task.status, task.uploaded_image_url,
+          task.admin_done, task.planned_date, task.task_start_date,
+          task.submission_date, task.machine_name, task.part_name,
+          task.part_area, task.machine_part_id, task.duration,
+          task.machine_department, task.machine_division
+        ];
+
+        columns.forEach(value => {
+          placeholders.push(`$${paramIndex++}`);
+          params.push(value);
+        });
+
+        values.push(`(${placeholders.join(', ')})`);
+      });
+
+      const query = `
+        INSERT INTO maintenance_tasks (${columnNames.join(', ')})
+        VALUES ${values.join(', ')}
+        RETURNING id
+      `;
+
+      const result = await pool.query(query, params);
+      insertedIds.push(...result.rows.map(r => r.id));
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully generated ${insertedIds.length} maintenance task instances from ${tasks.length} unique task definitions`,
+      count: insertedIds.length,
+      insertedIds
+    });
+
+  } catch (error) {
+    console.error("Bulk import maintenance error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to import maintenance tasks",
+      error: error.message
+    });
+  }
+};

@@ -35,7 +35,7 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         LOWER(t.department) LIKE '%${searchLower}%' OR
         LOWER(t.given_by) LIKE '%${searchLower}%' OR
         LOWER(COALESCE(mp.machine_name, t.machine_name)) LIKE '%${searchLower}%' OR
-        LOWER(COALESCE(mp.part_name, t.part_name)) LIKE '%${searchLower}%' OR
+        LOWER(COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', '))) LIKE '%${searchLower}%' OR
         CAST(t.id AS TEXT) LIKE '%${searchLower}%'
       ) `;
         }
@@ -61,12 +61,14 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         t.uploaded_image_url as image,
         t.admin_done,
         COALESCE(mp.machine_name, t.machine_name) as machine_name,
-        COALESCE(mp.part_name, t.part_name) as part_name,
+        COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', ')) as part_name,
         COALESCE(mp.machine_area, t.part_area) as part_area,
         t.duration,
-        TO_CHAR(t.planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date,
+        t.planned_date::text as planned_date,
         t.created_at::text as created_at,
         t.machine_part_id,
+        t.machine_department,
+        t.machine_division,
         COUNT(*) OVER() AS total_count
       FROM maintenance_tasks t
       LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
@@ -85,8 +87,8 @@ export const getPendingMaintenanceTasks = async (req, res) => {
             totalCount,
         });
     } catch (error) {
-        console.error("❌ Error fetching pending maintenance tasks:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("❌ Error fetching pending maintenance tasks:", error.message);
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -119,7 +121,7 @@ export const getMaintenanceHistory = async (req, res) => {
         LOWER(t.department) LIKE $3 OR 
         LOWER(t.given_by) LIKE $3 OR
         LOWER(COALESCE(mp.machine_name, t.machine_name)) LIKE $3 OR
-        LOWER(COALESCE(mp.part_name, t.part_name)) LIKE $3 OR
+        LOWER(COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', '))) LIKE $3 OR
         CAST(t.id AS TEXT) LIKE $3 OR
         LOWER(t.unit) LIKE $3 OR
         LOWER(t.division) LIKE $3
@@ -148,14 +150,16 @@ export const getMaintenanceHistory = async (req, res) => {
         t.uploaded_image_url as image,
         t.admin_done,
         COALESCE(mp.machine_name, t.machine_name) as machine_name,
-        COALESCE(mp.part_name, t.part_name) as part_name,
+        COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', ')) as part_name,
         COALESCE(mp.machine_area, t.part_area) as part_area,
         t.duration,
         t.planned_date::text as planned_date,
         t.created_at::text as created_at,
         t.machine_part_id,
+        t.machine_department,
+        t.machine_division,
         COUNT(*) OVER() AS total_count,
-        SUM(CASE WHEN t.admin_done IS NOT NULL AND t.admin_done != '' THEN 1 ELSE 0 END) OVER() AS approved_count
+        SUM(CASE WHEN t.admin_done = 'true' OR t.admin_done = 'Done' THEN 1 ELSE 0 END) OVER() AS approved_count
       FROM maintenance_tasks t
       LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
       WHERE ${where}
@@ -175,8 +179,8 @@ export const getMaintenanceHistory = async (req, res) => {
             approvedCount,
         });
     } catch (error) {
-        console.error("❌ Error fetching history:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("❌ Error fetching history:", error.message);
+        res.status(500).json({ error: error.message });
     }
 };
 
@@ -275,7 +279,7 @@ export const adminDoneMaintenance = async (req, res) => {
 
         const sql = `
       UPDATE maintenance_tasks
-      SET admin_done = true
+      SET admin_done = 'true'
       WHERE id = $1
     `;
 
@@ -302,7 +306,7 @@ export const adminDoneMaintenance = async (req, res) => {
 export const getMaintenanceDropdownOptions = async (req, res) => {
     try {
         const machineNamesQuery = `SELECT DISTINCT machine_name FROM maintenance_tasks WHERE machine_name IS NOT NULL AND machine_name != '' ORDER BY machine_name`;
-        const partNamesQuery = `SELECT DISTINCT part_name FROM maintenance_tasks WHERE part_name IS NOT NULL AND part_name != '' ORDER BY part_name`;
+        const partNamesQuery = `SELECT DISTINCT unnest_part FROM (SELECT UNNEST(part_name) as unnest_part FROM maintenance_tasks WHERE part_name IS NOT NULL) sub WHERE unnest_part IS NOT NULL AND unnest_part != '' ORDER BY unnest_part`;
         const partAreasQuery = `SELECT DISTINCT part_area FROM maintenance_tasks WHERE part_area IS NOT NULL AND part_area != '' ORDER BY part_area`;
 
         const [machineNames, partNames, partAreas] = await Promise.all([
@@ -313,7 +317,7 @@ export const getMaintenanceDropdownOptions = async (req, res) => {
 
         res.json({
             machineNames: machineNames.rows.map(r => r.machine_name),
-            partNames: partNames.rows.map(r => r.part_name),
+            partNames: partNames.rows.map(r => r.unnest_part),
             partAreas: partAreas.rows.map(r => r.part_area),
         });
     } catch (error) {
@@ -330,6 +334,7 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
         const page = parseInt(req.body.page) || 0;
         const pageSize = parseInt(req.body.pageSize) || 50;
         const nameFilter = req.body.nameFilter || "";
+        const freqFilter = req.body.freqFilter || "";
 
         const offset = page * pageSize;
         const params = [];
@@ -340,6 +345,11 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
         if (nameFilter) {
             whereClause += ` AND LOWER(t.name) = LOWER($${paramIndex++})`;
             params.push(nameFilter);
+        }
+
+        if (freqFilter) {
+            whereClause += ` AND t.frequency = $${paramIndex++}`;
+            params.push(freqFilter);
         }
 
         const dataQuery = `
@@ -363,12 +373,14 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
             t.uploaded_image_url as image,
             t.admin_done,
             COALESCE(mp.machine_name, t.machine_name) as machine_name,
-            COALESCE(mp.part_name, t.part_name) as part_name,
+            COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', ')) as part_name,
             COALESCE(mp.machine_area, t.part_area) as part_area,
             t.duration,
             TO_CHAR(t.planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date,
             t.created_at::text as created_at,
-            t.machine_part_id
+            t.machine_part_id,
+            t.machine_department,
+            t.machine_division
           FROM maintenance_tasks t
           LEFT JOIN machine_parts mp ON t.machine_part_id = mp.id
           WHERE ${whereClause}
@@ -465,11 +477,13 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             require_attachment = $8,
             machine_name = $9,
             part_name = $10,
-            part_area = $11,
+            machine_area = $11,
             duration = $12,
-            status = $13
-          WHERE name = $14
-          AND task_description = $15
+            status = $13,
+            machine_department = $14,
+            machine_division = $15
+          WHERE name = $16
+          AND task_description = $17
           AND submission_date IS NULL
           RETURNING *
         `;
@@ -489,6 +503,8 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             updatedTask.part_area,
             updatedTask.duration,
             updatedTask.status || originalTask.status, // Fallback if status is empty string from "Select Status" option
+            updatedTask.machine_department,
+            updatedTask.machine_division,
             originalTask.name,
             originalTask.task_description
         ];

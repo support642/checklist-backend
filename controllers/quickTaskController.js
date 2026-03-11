@@ -4,7 +4,8 @@ import pool from "../config/db.js";
 export const fetchChecklist = async (
   page = 0,
   pageSize = 50,
-  nameFilter = ""
+  nameFilter = "",
+  freqFilter = ""
 ) => {
   try {
     const offset = page * pageSize;
@@ -16,6 +17,11 @@ export const fetchChecklist = async (
     if (nameFilter) {
       whereClause += ` AND LOWER(name) = LOWER($${paramIndex++})`;
       params.push(nameFilter);
+    }
+
+    if (freqFilter) {
+      whereClause += ` AND frequency = $${paramIndex++}`;
+      params.push(freqFilter);
     }
 
     // ⭐ DISTINCT ON ensures uniqueness based on (name + task_description)
@@ -63,6 +69,7 @@ export const fetchDelegation = async (
   page = 0,
   pageSize = 50,
   nameFilter = "",
+  freqFilter = "",
   startDate,
   endDate
 ) => {
@@ -86,6 +93,11 @@ export const fetchDelegation = async (
     if (nameFilter) {
       filters.push(`LOWER(name) = LOWER($${paramIndex++})`);
       params.push(nameFilter);
+    }
+
+    if (freqFilter) {
+      filters.push(`frequency = $${paramIndex++}`);
+      params.push(freqFilter);
     }
 
     const whereClause = filters.join(" AND ");
