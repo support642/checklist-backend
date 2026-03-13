@@ -41,7 +41,27 @@ export const getCalendarTasks = async (req, res) => {
       ORDER BY task_start_date ASC
     `;
 
-    // Fetch delegation tasks
+    // Fetch maintenance tasks (using coalesce for date)
+    const maintenanceQuery = `
+      SELECT 
+        id as task_id,
+        department,
+        given_by,
+        name,
+        task_description,
+        frequency,
+        status,
+        COALESCE(task_start_date, planned_date) as task_start_date,
+        submission_date,
+        'maintenance' as task_type
+      FROM maintenance_tasks
+      WHERE (task_start_date IS NOT NULL OR planned_date IS NOT NULL) 
+      ${dateFilter.replace(/task_start_date/g, "COALESCE(task_start_date, planned_date)")} 
+      ${nameFilter}
+      ORDER BY task_start_date ASC
+    `;
+
+    // Fetch delegation tasks (using task_id)
     const delegationQuery = `
       SELECT 
         task_id,
@@ -59,16 +79,19 @@ export const getCalendarTasks = async (req, res) => {
       ORDER BY task_start_date ASC
     `;
 
-    const [checklistResult, delegationResult] = await Promise.all([
+    const [checklistResult, delegationResult, maintenanceResult] = await Promise.all([
       pool.query(checklistQuery),
-      pool.query(delegationQuery)
+      pool.query(delegationQuery),
+      pool.query(maintenanceQuery)
     ]);
 
     res.json({
       checklist: checklistResult.rows,
       delegation: delegationResult.rows,
+      maintenance: maintenanceResult.rows,
       totalChecklist: checklistResult.rows.length,
-      totalDelegation: delegationResult.rows.length
+      totalDelegation: delegationResult.rows.length,
+      totalMaintenance: maintenanceResult.rows.length
     });
 
   } catch (error) {
