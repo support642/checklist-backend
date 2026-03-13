@@ -41,13 +41,14 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
           unit,
           division
         FROM delegation
-        WHERE name = '${username}'
+        WHERE name = $1
         AND (
           (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
           OR (planned_date IS NOT NULL AND submission_date IS NULL)
         )
         ORDER BY task_start_date ASC;
       `;
+
     }
 
     // ADMIN: fetch ALL pending tasks (ignore user_access)
@@ -116,8 +117,9 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
 
     console.log("FINAL QUERY →", query);
 
-    const { rows } = await pool.query(query);
+    const { rows } = await pool.query(query, role === "user" ? [username] : []);
     return res.json(rows);
+
 
   } catch (err) {
     console.log("Pending fetch error:", err);

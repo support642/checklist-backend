@@ -10,6 +10,7 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const username = req.query.username;
         const role = req.query.role;
+        const department = req.query.department;
         const search = req.query.search || "";
 
         const limit = 50;
@@ -24,6 +25,12 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         // ⭐ If user is NOT admin → filter by name
         if (role !== "admin" && role !== "super_admin" && username) {
             where += ` AND LOWER(t.name) = LOWER('${username}') `;
+        }
+
+        // ⭐ If user is admin → filter by department
+        if (role === "admin" && department) {
+            const deptEscaped = department.replace(/'/g, "''");
+            where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
         }
 
         // ⭐ Add search filter if search term is provided
@@ -100,6 +107,7 @@ export const getMaintenanceHistory = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const username = req.query.username;
         const role = req.query.role;
+        const department = req.query.department;
         const search = req.query.search;
 
         const limit = 50;
@@ -110,6 +118,12 @@ export const getMaintenanceHistory = async (req, res) => {
         // ⭐ Normal users see only their own tasks
         if (role !== "admin" && role !== "super_admin" && username) {
             where += ` AND LOWER(t.name) = LOWER('${username}') `;
+        }
+
+        // ⭐ If user is admin → filter by department
+        if (role === "admin" && department) {
+            const deptEscaped = department.replace(/'/g, "''");
+            where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
         }
 
         const params = [limit, offset];

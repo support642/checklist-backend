@@ -32,27 +32,35 @@ export const getStaffTasks = async (req, res) => {
       AND task_start_date <= NOW()
     `;
 
+    const params = [];
+    let paramCount = 1;
+
     // Add month-year filter if provided
     if (monthYear) {
       const [year, month] = monthYear.split('-').map(Number);
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of month
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-      staffQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
+      staffQuery += ` AND task_start_date >= $${paramCount} AND task_start_date <= $${paramCount + 1}`;
+      params.push(startDate, `${endDate} 23:59:59`);
+      paramCount += 2;
     }
 
     // Add till-date filter if provided (independent of month filter)
     if (tillDate) {
-      staffQuery += ` AND task_start_date <= '${tillDate} 23:59:59'`;
+      staffQuery += ` AND task_start_date <= $${paramCount}`;
+      params.push(`${tillDate} 23:59:59`);
+      paramCount++;
     }
 
     if (staffFilter !== "all") {
-      staffQuery += ` AND LOWER(name) = LOWER('${staffFilter}')`;
+      staffQuery += ` AND LOWER(name) = LOWER($${paramCount})`;
+      params.push(staffFilter);
     }
 
     staffQuery += ` ORDER BY name ASC`;
 
-    const staffResult = await pool.query(staffQuery);
+    const staffResult = await pool.query(staffQuery, params);
     const allStaff = staffResult.rows.map(r => r.name);
 
     const paginatedStaff = allStaff.slice(offset, offset + limit);
@@ -93,9 +101,13 @@ export const getStaffTasks = async (req, res) => {
             END
           ) AS avg_delay_days
         FROM ${table}
-        WHERE LOWER(name)=LOWER('${staffName}')
-        AND task_start_date IS NOT NULL
       `;
+      const tp = [];
+      let tc = 1;
+
+      taskQuery += ` WHERE LOWER(name)=LOWER($${tc})`;
+      tp.push(staffName);
+      tc++;
 
       // Add month-year filter to task query if provided
       if (monthYear) {
@@ -103,17 +115,24 @@ export const getStaffTasks = async (req, res) => {
         const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
         const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-        taskQuery += ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59'`;
+        taskQuery += ` AND task_start_date >= $${tc} AND task_start_date <= $${tc + 1}`;
+        tp.push(startDate, `${endDate} 23:59:59`);
+        tc += 2;
       } else {
         taskQuery += ` AND task_start_date <= NOW()`;
       }
 
       // Add till-date filter to task query if provided
       if (tillDate) {
-        taskQuery += ` AND task_start_date <= '${tillDate} 23:59:59'`;
+        taskQuery += ` AND task_start_date <= $${tc}`;
+        tp.push(`${tillDate} 23:59:59`);
+        tc++;
       }
 
-      const taskResult = await pool.query(taskQuery);
+      taskQuery += ` AND task_start_date IS NOT NULL`;
+
+      const taskResult = await pool.query(taskQuery, tp);
+
       const total = Number(taskResult.rows[0].total);
       const completed = Number(taskResult.rows[0].completed);
       const doneOnTime = Number(taskResult.rows[0].done_on_time) || 0;
@@ -163,11 +182,14 @@ export const getStaffCount = async (req, res) => {
       AND task_start_date::timestamp <= NOW()
     `;
 
+    const paramsCount = [];
     if (staffFilter !== "all") {
-      query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+      query += ` AND LOWER(name)=LOWER($1)`;
+      paramsCount.push(staffFilter);
     }
 
-    const result = await pool.query(query);
+    const result = await pool.query(query, paramsCount);
+
     const count = result.rows.length;
 
     return res.json(count);

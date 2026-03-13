@@ -9,10 +9,13 @@ export const getPendingChecklist = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const username = req.query.username;
     const role = req.query.role;
+    const department = req.query.department;
     const search = req.query.search || "";
 
     const limit = 50;
     const offset = (page - 1) * limit;
+    const queryParams = [limit, offset];
+
 
     // Include future tasks up to 1 year ahead (frontend will filter by frequency)
     // This allows showing upcoming tasks based on frequency (daily: +1 day, weekly: +7 days, etc.)
@@ -23,7 +26,15 @@ export const getPendingChecklist = async (req, res) => {
 
     // ⭐ If user is NOT admin → filter by name
     if (role !== "admin" && role !== "super_admin" && username) {
-      where += ` AND LOWER(name) = LOWER('${username}') `;
+      where += ` AND LOWER(name) = LOWER($3) `;
+      queryParams.push(username);
+    }
+
+
+    // ⭐ If user is admin → filter by department
+    if (role === "admin" && department) {
+      const deptEscaped = department.replace(/'/g, "''");
+      where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
     }
 
     // ⭐ Add search filter if search term is provided
@@ -67,7 +78,8 @@ export const getPendingChecklist = async (req, res) => {
       LIMIT $1 OFFSET $2
     `;
 
-    const { rows } = await pool.query(query, [limit, offset]);
+    const { rows } = await pool.query(query, queryParams);
+
 
     const totalCount = rows.length > 0 ? rows[0].total_count : 0;
 
@@ -135,6 +147,7 @@ export const getChecklistHistory = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const username = req.query.username;
     const role = req.query.role;
+    const department = req.query.department;
     const search = req.query.search;
 
     const limit = 50;
@@ -145,6 +158,12 @@ export const getChecklistHistory = async (req, res) => {
     // ⭐ Normal users see only their own tasks
     if (role !== "admin" && role !== "super_admin" && username) {
       where += ` AND LOWER(name) = LOWER('${username}') `;
+    }
+
+    // ⭐ If user is admin → filter by department
+    if (role === "admin" && department) {
+      const deptEscaped = department.replace(/'/g, "''");
+      where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
     }
 
     const params = [limit, offset];

@@ -1,6 +1,56 @@
 // controllers/settingController.js
 import pool from "../config/db.js";
 
+function getDefaultPermissions(role) {
+  if (role === "user") {
+    return {
+      system_access: ["checklist"],
+      page_access: [
+        "dashboard",
+        "assign_task",
+        "delegation",
+        "pending_task",
+        "admin_approval",
+        "calendar"
+      ]
+    };
+  }
+
+  if (role === "admin") {
+    return {
+      system_access: ["checklist", "maintenance"],
+      page_access: [
+        "dashboard",
+        "dashboard_admin",
+        "assign_task",
+        "assign_task_admin",
+        "delegation",
+        "delegation_admin",
+        "pending_task",
+        "admin_approval",
+        "calendar",
+        "quick_task",
+        "quick_task_admin",
+        "settings",
+        "holiday_management",
+        "admin_data"
+      ]
+    };
+  }
+
+  if (role === "super_admin") {
+    return {
+      system_access: ["*"],
+      page_access: ["*"]
+    };
+  }
+
+  return {
+    system_access: [],
+    page_access: []
+  };
+}
+
 /*******************************
  * 1) GET USERS
  *******************************/
@@ -37,15 +87,29 @@ export const createUser = async (req, res) => {
       status,
       user_access,
       unit,
-      division
+      division,
+      system_access,
+      page_access
     } = req.body;
+
+
+    let permissions = getDefaultPermissions(role || 'employee');
+
+    // Override defaults if manual permissions are provided
+    if (system_access && Array.isArray(system_access) && system_access.length > 0) {
+      permissions.system_access = system_access;
+    }
+    if (page_access && Array.isArray(page_access) && page_access.length > 0) {
+      permissions.page_access = page_access;
+    }
+
 
     const query = `
       INSERT INTO users (
         user_name, password, email_id, number, department,
-        given_by, role, status, user_access, unit, division
+        given_by, role, status, user_access, unit, division, system_access, page_access
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       RETURNING *
     `;
 
@@ -61,16 +125,17 @@ export const createUser = async (req, res) => {
       status || 'active',
       user_access || null,
       unit || null,
-      division || null
+      division || null,
+      JSON.stringify(permissions.system_access || []),
+      JSON.stringify(permissions.page_access || [])
     ];
 
     const result = await pool.query(query, values);
 
     res.json(result.rows[0]);
-
   } catch (error) {
-    console.error("❌ Error creating user:", error);
-    res.status(500).json({ error: "Database error" });
+    console.error("❌ Error creating user:", error.message);
+    res.status(500).json({ error: "Database error", detail: error.message });
   }
 };
 
@@ -97,7 +162,9 @@ export const updateUser = async (req, res) => {
       given_by,
       leave_date,
       leave_end_date,
-      remark
+      remark,
+      system_access,
+      page_access
     } = req.body;
 
     const query = `
@@ -116,24 +183,28 @@ export const updateUser = async (req, res) => {
         leave_end_date = $12,
         remark = $13,
         unit = $15,
-        division = $16
+        division = $16,
+        system_access = $17,
+        page_access = $18
       WHERE id = $14
       RETURNING *
     `;
 
     const values = [
-      user_name, password, email_id, number, employee_id,
+      user_name || null, password || null, email_id || null, number || null, employee_id || null,
       role, status, user_access, department, given_by,
-      leave_date, leave_end_date, remark, id, unit || null, division || null
+      leave_date, leave_end_date, remark, id, unit || null, division || null,
+      JSON.stringify(system_access || []),
+      JSON.stringify(page_access || [])
     ];
+
 
     const result = await pool.query(query, values);
 
     res.json(result.rows[0]);
-
   } catch (error) {
-    console.error("❌ Error updating user:", error);
-    res.status(500).json({ error: "Database error" });
+    console.error("❌ Error updating user:", error.message);
+    res.status(500).json({ error: "Database error", detail: error.message });
   }
 };
 
