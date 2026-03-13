@@ -174,12 +174,14 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
     }
     // ADMIN FILTER — Fetch based on user_access departments
     else if ((role === "admin" || role === "super_admin") && userAccess) {
-      const depts = userAccess
-        .replace(/\+/g, " ")
-        .split(",")
-        .map((d) => `'${d.trim().toLowerCase()}'`)
-        .join(",");
-      whereConditions.push(`LOWER(d.department) IN (${depts})`);
+      if (role !== "super_admin") {
+        const depts = userAccess
+          .replace(/\+/g, " ")
+          .split(",")
+          .map((d) => `'${d.trim().toLowerCase()}'`)
+          .join(",");
+        whereConditions.push(`LOWER(d.department) IN (${depts})`);
+      }
     }
 
     if (search) {
