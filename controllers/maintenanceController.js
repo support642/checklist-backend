@@ -22,15 +22,29 @@ export const getPendingMaintenanceTasks = async (req, res) => {
       AND DATE(t.task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
     `;
 
-        // ⭐ If user is NOT admin → filter by name
-        if (role !== "admin" && role !== "super_admin" && username) {
-            where += ` AND LOWER(t.name) = LOWER('${username}') `;
-        }
+        const requesterUnit = req.query.unit;
+        const requesterDivision = req.query.division;
+        const upRole = (role || "").toUpperCase();
 
-        // ⭐ If user is admin → filter by department
-        if (role === "admin" && department) {
-            const deptEscaped = department.replace(/'/g, "''");
-            where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+        if (upRole === "SUPER_ADMIN") {
+            // No additional filter
+        } 
+        else if (upRole === "DIV_ADMIN") {
+            if (requesterUnit && requesterDivision) {
+                where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
+            }
+        }
+        else if (upRole === "ADMIN") {
+            if (requesterUnit && requesterDivision && department) {
+                const deptEscaped = department.replace(/'/g, "''");
+                where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+            } else if (department) {
+                const deptEscaped = department.replace(/'/g, "''");
+                where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+            }
+        }
+        else if (username) {
+            where += ` AND LOWER(t.name) = LOWER('${username.replace(/'/g, "''")}') `;
         }
 
         // ⭐ Add search filter if search term is provided
@@ -115,15 +129,29 @@ export const getMaintenanceHistory = async (req, res) => {
 
         let where = `t.submission_date IS NOT NULL`;
 
-        // ⭐ Normal users see only their own tasks
-        if (role !== "admin" && role !== "super_admin" && username) {
-            where += ` AND LOWER(t.name) = LOWER('${username}') `;
-        }
+        const requesterUnit = req.query.unit;
+        const requesterDivision = req.query.division;
+        const upRole = (role || "").toUpperCase();
 
-        // ⭐ If user is admin → filter by department
-        if (role === "admin" && department) {
-            const deptEscaped = department.replace(/'/g, "''");
-            where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+        if (upRole === "SUPER_ADMIN") {
+            // No additional filter
+        } 
+        else if (upRole === "DIV_ADMIN") {
+            if (requesterUnit && requesterDivision) {
+                where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
+            }
+        }
+        else if (upRole === "ADMIN") {
+            if (requesterUnit && requesterDivision && department) {
+                const deptEscaped = department.replace(/'/g, "''");
+                where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+            } else if (department) {
+                const deptEscaped = department.replace(/'/g, "''");
+                where += ` AND LOWER(t.department) = LOWER('${deptEscaped}') `;
+            }
+        }
+        else if (username) {
+            where += ` AND LOWER(t.name) = LOWER('${username.replace(/'/g, "''")}') `;
         }
 
         const params = [limit, offset];

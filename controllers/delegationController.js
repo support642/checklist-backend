@@ -15,109 +15,29 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
 
     console.log("PARAMS →", req.query);
 
-    // USER: only own pending
-    if (role === "user") {
-      query = `
-        SELECT 
-          task_id,
-          department,
-          given_by,
-          name,
-          task_description,
-          frequency,
-          enable_reminder,
-          require_attachment,
-          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          status,
-          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
-          image,
-          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
-          remarks,
-          adminremarks,
-          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
-          color_code_for,
-          delay,
-          unit,
-          division
-        FROM delegation
-        WHERE name = $1
-        AND (
-          (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
-          OR (planned_date IS NOT NULL AND submission_date IS NULL)
-        )
-        ORDER BY task_start_date ASC;
-      `;
+    // Normalize role comparison
+    const upRole = (role || "").toUpperCase();
+    const requesterUnit = req.query.unit || "";
+    const requesterDivision = req.query.division || "";
+    const requesterDepartment = req.query.department || "";
 
+    if (upRole === "SUPER_ADMIN") {
+      query = `SELECT * FROM delegation WHERE (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL) ORDER BY task_start_date ASC;`;
+    } else if (upRole === "DIV_ADMIN") {
+      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
+    } else if (upRole === "ADMIN") {
+      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND LOWER(department)=LOWER($3) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
+    } else {
+      query = `SELECT * FROM delegation WHERE name = $1 AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
     }
 
-    // ADMIN: fetch ALL pending tasks (ignore user_access)
-    else if (role === "admin" || role === "super_admin") {
-      query = `
-        SELECT 
-          task_id,
-          department,
-          given_by,
-          name,
-          task_description,
-          frequency,
-          enable_reminder,
-          require_attachment,
-          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          status,
-          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
-          image,
-          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
-          remarks,
-          adminremarks,
-          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
-          color_code_for,
-          delay,
-          unit,
-          division
-        FROM delegation
-        WHERE (
-          (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending')
-          OR (planned_date IS NOT NULL AND submission_date IS NULL)
-        )
-        ORDER BY task_start_date ASC;
-      `;
-    }
+    let params_val = [];
+    if (upRole === "DIV_ADMIN") params_val = [requesterUnit, requesterDivision];
+    else if (upRole === "ADMIN") params_val = [requesterUnit, requesterDivision, requesterDepartment];
+    else if (upRole === "SUPER_ADMIN") params_val = [];
+    else params_val = [username || ""];
 
-    // NO ROLE (fallback)
-    else {
-      query = `
-        SELECT 
-          task_id,
-          department,
-          given_by,
-          name,
-          task_description,
-          frequency,
-          enable_reminder,
-          require_attachment,
-          to_char(planned_date, 'YYYY-MM-DD HH24:MI:SS') as planned_date,
-          status,
-          to_char(task_start_date, 'YYYY-MM-DD HH24:MI:SS') as task_start_date,
-          image,
-          to_char(submission_date, 'YYYY-MM-DD HH24:MI:SS') as submission_date,
-          remarks,
-          adminremarks,
-          to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at,
-          to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at,
-          color_code_for,
-          delay,
-          unit,
-          division
-        FROM delegation
-        ORDER BY task_start_date ASC;
-      `;
-    }
-
-    console.log("FINAL QUERY →", query);
-
-    const { rows } = await pool.query(query, role === "user" ? [username] : []);
+    const { rows } = await pool.query(query, params_val);
     return res.json(rows);
 
 
@@ -166,22 +86,28 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
     const params = [];
     let paramIndex = 1;
 
-    // USER LEVEL FILTER
-    if (role === "user") {
-      whereConditions.push(`dd.name = $${paramIndex}`);
+    const upRole = role ? role.toUpperCase() : "USER";
+    const requesterUnit = req.query.unit;
+    const requesterDivision = req.query.division;
+    const requesterDepartment = req.query.department;
+
+    if (upRole === "SUPER_ADMIN" || upRole === "super_admin") {
+      // No filter
+    } else if (upRole === "DIV_ADMIN" || upRole === "div_admin") {
+      whereConditions.push(`LOWER(d.unit) = LOWER($${paramIndex++})`);
+      params.push(requesterUnit);
+      whereConditions.push(`LOWER(d.division) = LOWER($${paramIndex++})`);
+      params.push(requesterDivision);
+    } else if (upRole === "ADMIN" || upRole === "admin") {
+      whereConditions.push(`LOWER(d.unit) = LOWER($${paramIndex++})`);
+      params.push(requesterUnit);
+      whereConditions.push(`LOWER(d.division) = LOWER($${paramIndex++})`);
+      params.push(requesterDivision);
+      whereConditions.push(`LOWER(d.department) = LOWER($${paramIndex++})`);
+      params.push(requesterDepartment || userAccess);
+    } else {
+      whereConditions.push(`dd.name = $${paramIndex++}`);
       params.push(username);
-      paramIndex++;
-    }
-    // ADMIN FILTER — Fetch based on user_access departments
-    else if ((role === "admin" || role === "super_admin") && userAccess) {
-      if (role !== "super_admin") {
-        const depts = userAccess
-          .replace(/\+/g, " ")
-          .split(",")
-          .map((d) => `'${d.trim().toLowerCase()}'`)
-          .join(",");
-        whereConditions.push(`LOWER(d.department) IN (${depts})`);
-      }
     }
 
     if (search) {

@@ -31,7 +31,10 @@ export const getUniqueDepartments = async (req, res) => {
     if (user.rows.length === 0)
       return res.status(404).json({ message: "User not found" });
 
-    if (user.rows[0].role === "admin" || user.rows[0].role === "super_admin") {
+    const userRow = user.rows[0];
+    const role = userRow.role ? userRow.role.toUpperCase() : "USER";
+
+    if (role === "SUPER_ADMIN" || role === "super_admin") {
       const result = await pool.query(`
         SELECT DISTINCT department
         FROM users
@@ -41,12 +44,26 @@ export const getUniqueDepartments = async (req, res) => {
       return res.json(result.rows.map(r => r.department));
     }
 
-    const result = await pool.query(
-      `SELECT DISTINCT department FROM users WHERE LOWER(department)=LOWER($1)`,
-      [user.rows[0].user_access]
-    );
+    if (role === "DIV_ADMIN" || role === "div_admin") {
+      const { unit, division } = userRow;
+      const result = await pool.query(
+        `SELECT DISTINCT department FROM users WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND department IS NOT NULL ORDER BY department ASC`,
+        [unit, division]
+      );
+      return res.json(result.rows.map(r => r.department));
+    }
 
-    return res.json(result.rows.map(r => r.department));
+    if (role === "ADMIN" || role === "admin") {
+      const { unit, division, department } = userRow;
+      const result = await pool.query(
+        `SELECT DISTINCT department FROM users WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND LOWER(department)=LOWER($3) AND department IS NOT NULL ORDER BY department ASC`,
+        [unit, division, department]
+      );
+      return res.json(result.rows.map(r => r.department));
+    }
+
+    // Default for USER
+    return res.json([]);
   } catch (e) {
     console.error(e);
     res.status(500).send("Server Error");

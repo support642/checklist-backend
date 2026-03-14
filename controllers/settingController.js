@@ -16,7 +16,7 @@ function getDefaultPermissions(role) {
     };
   }
 
-  if (role === "admin") {
+  if (role === "admin" || role === "ADMIN" || role === "DIV_ADMIN" || role === "div_admin") {
     return {
       system_access: ["checklist", "maintenance"],
       page_access: [
@@ -38,7 +38,7 @@ function getDefaultPermissions(role) {
     };
   }
 
-  if (role === "super_admin") {
+  if (role === "super_admin" || role === "SUPER_ADMIN") {
     return {
       system_access: ["*"],
       page_access: ["*"]
@@ -56,12 +56,36 @@ function getDefaultPermissions(role) {
  *******************************/
 export const getUsers = async (req, res) => {
   try {
-    const result = await pool.query(`
+    const { requesterRole, requesterUnit, requesterDivision, requesterDepartment } = req.query;
+
+    let query = `
       SELECT *
       FROM users
       WHERE user_name IS NOT NULL
-      ORDER BY id ASC
-    `);
+    `;
+    const params = [];
+
+    // Apply role-based filtering if requester info is provided
+    if (requesterRole) {
+      const role = requesterRole.toUpperCase();
+      
+      if (role === "SUPER_ADMIN") {
+        // No filter
+      } else if (role === "DIV_ADMIN") {
+        params.push(requesterUnit, requesterDivision);
+        query += ` AND LOWER(unit) = LOWER($1) AND LOWER(division) = LOWER($2)`;
+      } else if (role === "ADMIN") {
+        params.push(requesterUnit, requesterDivision, requesterDepartment);
+        query += ` AND LOWER(unit) = LOWER($1) AND LOWER(division) = LOWER($2) AND LOWER(department) = LOWER($3)`;
+      } else {
+        // Standard user or other - ideally they shouldn't call this, but let's be safe
+        params.push(req.query.username || ''); // Fallback to self
+        query += ` AND user_name = $1`;
+      }
+    }
+
+    query += ` ORDER BY id ASC`;
+    const result = await pool.query(query, params);
 
     res.json(result.rows);
   } catch (error) {
@@ -126,8 +150,8 @@ export const createUser = async (req, res) => {
       user_access || null,
       unit || null,
       division || null,
-      JSON.stringify(permissions.system_access || []),
-      JSON.stringify(permissions.page_access || [])
+      system_access ? JSON.stringify(system_access) : null,
+      page_access ? JSON.stringify(page_access) : null
     ];
 
     const result = await pool.query(query, values);
@@ -194,8 +218,8 @@ export const updateUser = async (req, res) => {
       user_name || null, password || null, email_id || null, number || null, employee_id || null,
       role, status, user_access, department, given_by,
       leave_date, leave_end_date, remark, id, unit || null, division || null,
-      JSON.stringify(system_access || []),
-      JSON.stringify(page_access || [])
+      system_access ? JSON.stringify(system_access) : null,
+      page_access ? JSON.stringify(page_access) : null
     ];
 
 

@@ -24,17 +24,36 @@ export const getPendingChecklist = async (req, res) => {
   AND DATE(task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
 `;
 
-    // ⭐ If user is NOT admin → filter by name
-    if (role !== "admin" && role !== "super_admin" && username) {
+    // Normalize role comparison
+    const upRole = (role || "").toUpperCase();
+    const requesterUnit = req.query.unit || "";
+    const requesterDivision = req.query.division || "";
+    const requesterDepartment = (req.query.department || department || "").trim();
+
+    // ⭐ SUPER_ADMIN → All
+    if (upRole === "SUPER_ADMIN") {
+      // No additional filter
+    }
+    // ⭐ DIV_ADMIN → unit + division
+    else if (upRole === "DIV_ADMIN") {
+      if (requesterUnit && requesterDivision) {
+        where += ` AND LOWER(unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
+      }
+    }
+    // ⭐ ADMIN → unit + division + department
+    else if (upRole === "ADMIN") {
+      if (requesterUnit && requesterDivision && requesterDepartment) {
+        const deptEscaped = requesterDepartment.replace(/'/g, "''");
+        where += ` AND LOWER(unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(division) = LOWER('${requesterDivision.replace(/'/g, "''")}') AND LOWER(department) = LOWER('${deptEscaped}') `;
+      } else if (requesterDepartment) {
+        const deptEscaped = requesterDepartment.replace(/'/g, "''");
+        where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
+      }
+    }
+    // ⭐ Normal users → own tasks
+    else if (username) {
       where += ` AND LOWER(name) = LOWER($3) `;
       queryParams.push(username);
-    }
-
-
-    // ⭐ If user is admin → filter by department
-    if (role === "admin" && department) {
-      const deptEscaped = department.replace(/'/g, "''");
-      where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
     }
 
     // ⭐ Add search filter if search term is provided
@@ -155,15 +174,33 @@ export const getChecklistHistory = async (req, res) => {
 
     let where = `submission_date IS NOT NULL`;
 
-    // ⭐ Normal users see only their own tasks
-    if (role !== "admin" && role !== "super_admin" && username) {
-      where += ` AND LOWER(name) = LOWER('${username}') `;
-    }
+    const upRole = role ? role.toUpperCase() : "USER";
+    const requesterUnit = req.query.unit;
+    const requesterDivision = req.query.division;
 
-    // ⭐ If user is admin → filter by department
-    if (role === "admin" && department) {
-      const deptEscaped = department.replace(/'/g, "''");
-      where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
+    // ⭐ SUPER_ADMIN → All
+    if (upRole === "SUPER_ADMIN" || upRole === "super_admin") {
+      // No filter
+    }
+    // ⭐ DIV_ADMIN → unit + division
+    else if (upRole === "DIV_ADMIN" || upRole === "div_admin") {
+      if (requesterUnit && requesterDivision) {
+        where += ` AND LOWER(unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
+      }
+    }
+    // ⭐ ADMIN → unit + division + department
+    else if (upRole === "ADMIN" || upRole === "admin") {
+      if (requesterUnit && requesterDivision && department) {
+        const deptEscaped = department.replace(/'/g, "''");
+        where += ` AND LOWER(unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(division) = LOWER('${requesterDivision.replace(/'/g, "''")}') AND LOWER(department) = LOWER('${deptEscaped}') `;
+      } else if (department) {
+        const deptEscaped = department.replace(/'/g, "''");
+        where += ` AND LOWER(department) = LOWER('${deptEscaped}') `;
+      }
+    }
+    // ⭐ Normal users → own tasks
+    else if (username) {
+      where += ` AND LOWER(name) = LOWER('${username.replace(/'/g, "''")}') `;
     }
 
     const params = [limit, offset];
