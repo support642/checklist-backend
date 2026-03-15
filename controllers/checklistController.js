@@ -93,7 +93,7 @@ export const getPendingChecklist = async (req, res) => {
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}
-      ORDER BY task_start_date ASC
+      ORDER BY task_start_date DESC
       LIMIT $1 OFFSET $2
     `;
 
