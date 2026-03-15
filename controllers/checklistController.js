@@ -104,7 +104,8 @@ export const getPendingChecklist = async (req, res) => {
       WHERE ${where}
       ORDER BY 
         CASE WHEN DATE(task_start_date) <= CURRENT_DATE THEN 0 ELSE 1 END,
-        ABS(EXTRACT(EPOCH FROM (DATE(task_start_date) - CURRENT_DATE)))
+        ABS(DATE(task_start_date) - CURRENT_DATE)
+
       LIMIT $1 OFFSET $2
     `;
 
