@@ -17,11 +17,20 @@ export const getPendingChecklist = async (req, res) => {
     const queryParams = [limit, offset];
 
 
-    // Include future tasks up to 1 year ahead (frontend will filter by frequency)
-    // This allows showing upcoming tasks based on frequency (daily: +1 day, weekly: +7 days, etc.)
+    // Filter tasks based on their frequency window so pagination works correctly
+    // Daily tasks: today + 1 day, Weekly: +7 days, etc.
     let where = `
   submission_date IS NULL
-  AND DATE(task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
+  AND DATE(task_start_date) <= CURRENT_DATE + 
+    CASE LOWER(COALESCE(frequency, 'daily'))
+      WHEN 'daily' THEN INTERVAL '1 day'
+      WHEN 'weekly' THEN INTERVAL '7 days'
+      WHEN 'fortnightly' THEN INTERVAL '14 days'
+      WHEN 'monthly' THEN INTERVAL '30 days'
+      WHEN 'quarterly' THEN INTERVAL '90 days'
+      WHEN 'yearly' THEN INTERVAL '365 days'
+      ELSE INTERVAL '1 day'
+    END
 `;
 
     // Normalize role comparison
@@ -93,7 +102,9 @@ export const getPendingChecklist = async (req, res) => {
         COUNT(*) OVER() AS total_count
       FROM checklist
       WHERE ${where}
-      ORDER BY task_start_date DESC
+      ORDER BY 
+        CASE WHEN DATE(task_start_date) <= CURRENT_DATE THEN 0 ELSE 1 END,
+        ABS(EXTRACT(EPOCH FROM (DATE(task_start_date) - CURRENT_DATE)))
       LIMIT $1 OFFSET $2
     `;
 
