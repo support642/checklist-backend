@@ -470,8 +470,8 @@ export const getStaffByDepartment = async (req, res) => {
         // Match if user's primary department matches
         const deptMatch = u.department && u.department.toLowerCase() === department.toLowerCase();
 
-        // Match if user has access to the department
-        const accessMatch = u.user_access && u.user_access.toLowerCase().includes(department.toLowerCase());
+        // Match if user has access to the department (exact match in comma-separated list)
+        const accessMatch = u.user_access && u.user_access.split(',').some(access => access.trim().toLowerCase() === department.toLowerCase());
 
         return deptMatch || accessMatch;
       });

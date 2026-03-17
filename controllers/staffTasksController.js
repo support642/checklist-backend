@@ -8,7 +8,12 @@ export const getStaffTasks = async (req, res) => {
       page = 1,
       limit = 50,
       monthYear = "",
-      tillDate = ""
+      tillDate = "",
+      role = "",
+      username = "",
+      unit = "",
+      division = "",
+      department = ""
     } = req.query;
 
     const table = dashboardType;
@@ -22,18 +27,47 @@ export const getStaffTasks = async (req, res) => {
       completedCondition = "LOWER(status) = 'yes'";
     }
 
-    // STEP 1 — Fetch unique names with month-year filter
-    let staffQuery = `
-      SELECT DISTINCT name 
-      FROM ${table}
-      WHERE name IS NOT NULL
-      AND name != ''
-      AND task_start_date IS NOT NULL
-      AND task_start_date <= NOW()
-    `;
-
     const params = [];
     let paramCount = 1;
+
+    let staffQuery = "";
+    const userRole = (role || "").toUpperCase();
+
+    if (userRole === "SUPER_ADMIN" || !userRole) {
+      staffQuery = `
+        SELECT DISTINCT t.name, u.department, u.division
+        FROM ${table} t
+        LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        WHERE t.name IS NOT NULL
+        AND t.name != ''
+        AND t.task_start_date IS NOT NULL
+        AND t.task_start_date <= NOW()
+      `;
+    } else {
+      staffQuery = `
+        SELECT DISTINCT t.name, u.department, u.division
+        FROM ${table} t
+        JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        WHERE t.name IS NOT NULL
+        AND t.name != ''
+        AND t.task_start_date IS NOT NULL
+        AND t.task_start_date <= NOW()
+      `;
+
+      if (userRole === "DIV_ADMIN" && unit && division) {
+        staffQuery += ` AND LOWER(u.unit) = LOWER($${paramCount}) AND LOWER(u.division) = LOWER($${paramCount + 1})`;
+        params.push(unit, division);
+        paramCount += 2;
+      } else if (userRole === "ADMIN" && unit && division && department) {
+        staffQuery += ` AND LOWER(u.unit) = LOWER($${paramCount}) AND LOWER(u.division) = LOWER($${paramCount + 1}) AND LOWER(u.department) = LOWER($${paramCount + 2})`;
+        params.push(unit, division, department);
+        paramCount += 3;
+      } else if (userRole === "USER" && username) {
+        staffQuery += ` AND LOWER(t.name) = LOWER($${paramCount})`;
+        params.push(username);
+        paramCount++;
+      }
+    }
 
     // Add month-year filter if provided
     if (monthYear) {
@@ -41,27 +75,31 @@ export const getStaffTasks = async (req, res) => {
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-      staffQuery += ` AND task_start_date >= $${paramCount} AND task_start_date <= $${paramCount + 1}`;
+      staffQuery += ` AND t.task_start_date >= $${paramCount} AND t.task_start_date <= $${paramCount + 1}`;
       params.push(startDate, `${endDate} 23:59:59`);
       paramCount += 2;
     }
 
     // Add till-date filter if provided (independent of month filter)
     if (tillDate) {
-      staffQuery += ` AND task_start_date <= $${paramCount}`;
+      staffQuery += ` AND t.task_start_date <= $${paramCount}`;
       params.push(`${tillDate} 23:59:59`);
       paramCount++;
     }
 
     if (staffFilter !== "all") {
-      staffQuery += ` AND LOWER(name) = LOWER($${paramCount})`;
+      staffQuery += ` AND LOWER(t.name) = LOWER($${paramCount})`;
       params.push(staffFilter);
     }
 
-    staffQuery += ` ORDER BY name ASC`;
+    if (userRole === "SUPER_ADMIN") {
+      staffQuery += ` ORDER BY u.division ASC, u.department ASC, t.name ASC`;
+    } else {
+      staffQuery += ` ORDER BY t.name ASC`;
+    }
 
     const staffResult = await pool.query(staffQuery, params);
-    const allStaff = staffResult.rows.map(r => r.name);
+    const allStaff = staffResult.rows.map(r => r.name || r.t_name); // Should be name
 
     const paginatedStaff = allStaff.slice(offset, offset + limit);
 
@@ -171,25 +209,62 @@ export const getStaffTasks = async (req, res) => {
 
 export const getStaffCount = async (req, res) => {
   try {
-    const { dashboardType = "checklist", staffFilter = "all" } = req.query;
+    const {
+      dashboardType = "checklist",
+      staffFilter = "all",
+      role = "",
+      unit = "",
+      division = "",
+      department = ""
+    } = req.query;
     const table = dashboardType;
 
-    let query = `
-      SELECT DISTINCT name 
-      FROM ${table}
-      WHERE name IS NOT NULL 
-      AND name != ''
-      AND task_start_date::timestamp <= NOW()
-    `;
-
     const paramsCount = [];
+    let pc = 1;
+
+    let query = "";
+    const userRole = (role || "").toUpperCase();
+
+    if (userRole === "SUPER_ADMIN" || !userRole) {
+      query = `
+        SELECT DISTINCT t.name 
+        FROM ${table} t
+        LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        WHERE t.name IS NOT NULL 
+        AND t.name != ''
+        AND t.task_start_date::timestamp <= NOW()
+      `;
+    } else {
+      query = `
+        SELECT DISTINCT t.name 
+        FROM ${table} t
+        JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        WHERE t.name IS NOT NULL 
+        AND t.name != ''
+        AND t.task_start_date::timestamp <= NOW()
+      `;
+
+      if (userRole === "DIV_ADMIN" && unit && division) {
+        query += ` AND LOWER(u.unit) = LOWER($${pc}) AND LOWER(u.division) = LOWER($${pc + 1})`;
+        paramsCount.push(unit, division);
+        pc += 2;
+      } else if (userRole === "ADMIN" && unit && division && department) {
+        query += ` AND LOWER(u.unit) = LOWER($${pc}) AND LOWER(u.division) = LOWER($${pc + 1}) AND LOWER(u.department) = LOWER($${pc + 2})`;
+        paramsCount.push(unit, division, department);
+        pc += 3;
+      } else if (userRole === "USER" && username) {
+        query += ` AND LOWER(t.name) = LOWER($${pc})`;
+        paramsCount.push(username);
+        pc++;
+      }
+    }
+
     if (staffFilter !== "all") {
-      query += ` AND LOWER(name)=LOWER($1)`;
+      query += ` AND LOWER(${$pc === 1 ? 'name' : 't.name'})=LOWER($${pc})`;
       paramsCount.push(staffFilter);
     }
 
     const result = await pool.query(query, paramsCount);
-
     const count = result.rows.length;
 
     return res.json(count);

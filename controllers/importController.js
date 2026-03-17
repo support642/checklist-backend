@@ -54,6 +54,13 @@ const generateTaskDates = async (startDate, frequency, count = 365) => {
       taskDates.push(...workingDays);
       break;
 
+    case 'tertiary':
+      // Every 3rd working day
+      for (let i = 0; i < workingDays.length; i += 3) {
+        taskDates.push(workingDays[i]);
+      }
+      break;
+
     case 'weekly':
       // Every 7th working day
       for (let i = 0; i < workingDays.length; i += 7) {

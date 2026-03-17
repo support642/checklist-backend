@@ -24,6 +24,7 @@ export const getPendingChecklist = async (req, res) => {
   AND DATE(task_start_date) <= CURRENT_DATE + 
     CASE LOWER(COALESCE(frequency, 'daily'))
       WHEN 'daily' THEN INTERVAL '1 day'
+      WHEN 'tertiary' THEN INTERVAL '3 days'
       WHEN 'weekly' THEN INTERVAL '7 days'
       WHEN 'fortnightly' THEN INTERVAL '14 days'
       WHEN 'monthly' THEN INTERVAL '30 days'

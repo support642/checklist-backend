@@ -18,4 +18,23 @@ pool
   .then(() => console.log("✅ Connected to AWS RDS PostgreSQL"))
   .catch((err) => console.error("❌ Database connection error:", err.message));
 
-export default pool;
+  export default pool;
+
+// const pool2 = new Pool({
+//   host: process.env.DB_HOST,
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASSWORD,
+//   database: process.env.DB_NAME_2,
+//   port: process.env.DB_PORT,
+//   ssl: { rejectUnauthorized: false }, // required for AWS RDS
+// });
+
+// pool
+//   .connect()
+//   .then(() => console.log("✅ Connected to AWS RDS PostgreSQL"))
+//   .catch((err) => console.error("❌ Database connection error:", err.message));
+
+
+// export { pool, pool2 };
+
+

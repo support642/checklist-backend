@@ -332,13 +332,13 @@ export const getGivenByData = async (req, res) => {
  *******************************/
 export const createDepartment = async (req, res) => {
   try {
-    const { name, givenBy, unit, division } = req.body;
+    const { department, given_by, unit, division } = req.body;
 
     const result = await pool.query(`
       INSERT INTO users (department, given_by, unit, division)
       VALUES ($1, $2, $3, $4)
       RETURNING *
-    `, [name, givenBy, unit || null, division || null]);
+    `, [department, given_by, unit || null, division || null]);
 
     res.json(result.rows[0]);
 
