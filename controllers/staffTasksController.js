@@ -37,7 +37,7 @@ export const getStaffTasks = async (req, res) => {
       staffQuery = `
         SELECT DISTINCT t.name, u.department, u.division
         FROM ${table} t
-        LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        LEFT JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL
         AND t.name != ''
         AND t.task_start_date IS NOT NULL
@@ -47,7 +47,7 @@ export const getStaffTasks = async (req, res) => {
       staffQuery = `
         SELECT DISTINCT t.name, u.department, u.division
         FROM ${table} t
-        JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL
         AND t.name != ''
         AND t.task_start_date IS NOT NULL
@@ -99,7 +99,11 @@ export const getStaffTasks = async (req, res) => {
     }
 
     const staffResult = await pool.query(staffQuery, params);
-    const allStaff = staffResult.rows.map(r => r.name || r.t_name); // Should be name
+    const allStaff = staffResult.rows.map(r => ({
+      name: r.name || r.t_name,
+      department: r.department || "N/A",
+      division: r.division || "N/A"
+    }));
 
     const paginatedStaff = allStaff.slice(offset, offset + limit);
 
@@ -109,7 +113,8 @@ export const getStaffTasks = async (req, res) => {
 
     const finalData = [];
 
-    for (let staffName of paginatedStaff) {
+    for (let staffObj of paginatedStaff) {
+      const staffName = staffObj.name;
       // Get task data with timing calculation
       let taskQuery = `
         SELECT 
@@ -122,6 +127,13 @@ export const getStaffTasks = async (req, res) => {
                ELSE 0 
              END
           ) AS completed,
+          SUM(
+             CASE 
+               WHEN submission_date IS NULL AND COALESCE(${completedCondition}, false) = false AND task_start_date::date < CURRENT_DATE
+               THEN 1 
+               ELSE 0 
+             END
+          ) AS overdue,
           SUM(
             CASE 
               WHEN submission_date IS NOT NULL AND submission_date <= task_start_date
@@ -173,9 +185,10 @@ export const getStaffTasks = async (req, res) => {
 
       const total = Number(taskResult.rows[0].total);
       const completed = Number(taskResult.rows[0].completed);
+      const overdue = Number(taskResult.rows[0].overdue) || 0;
       const doneOnTime = Number(taskResult.rows[0].done_on_time) || 0;
       const avgDelayDays = Number(taskResult.rows[0].avg_delay_days) || 0;
-      const pending = total - completed;
+      const pending = total - completed - overdue;
 
       // Calculate on-time score as negative percentage
       let onTimeScore = 0;
@@ -188,10 +201,13 @@ export const getStaffTasks = async (req, res) => {
       finalData.push({
         id: staffName.toLowerCase().replace(/\s+/g, "-"),
         name: staffName,
+        department: staffObj.department,
+        division: staffObj.division,
         email: `${staffName.toLowerCase().replace(/\s+/g, ".")}@example.com`,
         totalTasks: total,
         completedTasks: completed,
         pendingTasks: pending,
+        overdueTasks: overdue,
         doneOnTime: doneOnTime,
         onTimeScore: onTimeScore
       });
@@ -213,6 +229,7 @@ export const getStaffCount = async (req, res) => {
       dashboardType = "checklist",
       staffFilter = "all",
       role = "",
+      username = "",
       unit = "",
       division = "",
       department = ""
@@ -229,7 +246,7 @@ export const getStaffCount = async (req, res) => {
       query = `
         SELECT DISTINCT t.name 
         FROM ${table} t
-        LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        LEFT JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL 
         AND t.name != ''
         AND t.task_start_date::timestamp <= NOW()
@@ -238,7 +255,7 @@ export const getStaffCount = async (req, res) => {
       query = `
         SELECT DISTINCT t.name 
         FROM ${table} t
-        JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
+        JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL 
         AND t.name != ''
         AND t.task_start_date::timestamp <= NOW()
@@ -260,7 +277,7 @@ export const getStaffCount = async (req, res) => {
     }
 
     if (staffFilter !== "all") {
-      query += ` AND LOWER(${$pc === 1 ? 'name' : 't.name'})=LOWER($${pc})`;
+      query += ` AND LOWER(${pc === 1 ? 'name' : 't.name'})=LOWER($${pc})`;
       paramsCount.push(staffFilter);
     }
 

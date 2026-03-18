@@ -377,6 +377,10 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
         const pageSize = parseInt(req.body.pageSize) || 50;
         const nameFilter = req.body.nameFilter || "";
         const freqFilter = req.body.freqFilter || "";
+        const userRole = req.body.userRole || "";
+        const userDept = req.body.userDept || "";
+        const userDiv = req.body.userDiv || "";
+        const userName = req.body.userName || "";
 
         const offset = page * pageSize;
         const params = [];
@@ -392,6 +396,28 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
         if (freqFilter) {
             whereClause += ` AND t.frequency = $${paramIndex++}`;
             params.push(freqFilter);
+        }
+
+        // Role-based filtering
+        const upRole = (userRole || "").toUpperCase();
+        if (upRole === "SUPER_ADMIN") {
+            // No filter
+        } 
+        else if (upRole === "DIV_ADMIN") {
+            if (userDiv) {
+                whereClause += ` AND LOWER(t.division) = LOWER($${paramIndex++})`;
+                params.push(userDiv);
+            }
+        }
+        else if (upRole === "ADMIN") {
+            if (userDept) {
+                whereClause += ` AND LOWER(t.department) = LOWER($${paramIndex++})`;
+                params.push(userDept);
+            }
+        }
+        else if (upRole === "USER" && userName) {
+            whereClause += ` AND LOWER(t.name) = LOWER($${paramIndex++})`;
+            params.push(userName);
         }
 
         const dataQuery = `

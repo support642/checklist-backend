@@ -1,6 +1,48 @@
 // controllers/loginController.js
 import pool from "../config/db.js";
 
+// Map to store active SSE connections: username -> Response[]
+export const activeClients = new Map();
+
+export const authStream = (req, res) => {
+  const { username } = req.query;
+  if (!username) {
+    return res.status(400).end();
+  }
+
+  // Setup Server-Sent Events headers
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders(); 
+
+  // Send an initial heartbeat to confirm connection
+  res.write("data: connected\n\n");
+
+  if (!activeClients.has(username)) {
+    activeClients.set(username, []);
+  }
+  activeClients.get(username).push(res);
+
+  // Remove connection when client disconnects
+  req.on("close", () => {
+    const clients = activeClients.get(username) || [];
+    activeClients.set(
+      username,
+      clients.filter((client) => client !== res)
+    );
+  });
+};
+
+export const triggerUserLogout = (username) => {
+  const clients = activeClients.get(username);
+  if (clients && clients.length > 0) {
+    clients.forEach((client) => {
+      client.write("event: logout\ndata: {}\n\n");
+    });
+  }
+};
+
 export const loginUserController = async (req, res) => {
   try {
     const { username, password } = req.body;

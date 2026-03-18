@@ -457,13 +457,21 @@ export const getUniqueDepartments = async (req, res) => {
 
 export const getStaffByDepartment = async (req, res) => {
   try {
-    const { department } = req.query;
+    const { department, unit, division } = req.query;
 
-    let query = `SELECT user_name, user_access, department FROM users WHERE user_name IS NOT NULL`;
+    let query = `SELECT user_name, user_access, department, unit, division FROM users WHERE user_name IS NOT NULL`;
 
     const result = await pool.query(query);
 
     let staff = result.rows;
+
+    if (unit && unit !== "all") {
+      staff = staff.filter(u => u.unit && u.unit.toLowerCase() === unit.toLowerCase());
+    }
+
+    if (division && division !== "all") {
+      staff = staff.filter(u => u.division && u.division.toLowerCase() === division.toLowerCase());
+    }
 
     if (department && department !== "all") {
       staff = staff.filter(u => {

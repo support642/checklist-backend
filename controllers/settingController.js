@@ -1,5 +1,6 @@
 // controllers/settingController.js
 import pool from "../config/db.js";
+import { triggerUserLogout } from "./loginController.js";
 
 function getDefaultPermissions(role) {
   if (role === "user") {
@@ -191,6 +192,10 @@ export const updateUser = async (req, res) => {
       page_access
     } = req.body;
 
+    // Fetch the old user_name before updating
+    const oldUserResult = await pool.query('SELECT user_name FROM users WHERE id = $1', [id]);
+    const oldUserName = oldUserResult.rows[0]?.user_name;
+
     const query = `
       UPDATE users SET
         user_name = $1,
@@ -224,8 +229,15 @@ export const updateUser = async (req, res) => {
 
 
     const result = await pool.query(query, values);
+    const updatedUser = result.rows[0];
 
-    res.json(result.rows[0]);
+    // Force log out the user across devices, handling if their username changed
+    if (oldUserName) triggerUserLogout(oldUserName);
+    if (updatedUser.user_name && updatedUser.user_name !== oldUserName) {
+      triggerUserLogout(updatedUser.user_name);
+    }
+
+    res.json(updatedUser);
   } catch (error) {
     console.error("❌ Error updating user:", error.message);
     res.status(500).json({ error: "Database error", detail: error.message });

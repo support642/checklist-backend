@@ -5,7 +5,11 @@ export const fetchChecklist = async (
   page = 0,
   pageSize = 50,
   nameFilter = "",
-  freqFilter = ""
+  freqFilter = "",
+  userRole = "",
+  userDept = "",
+  userDiv = "",
+  userName = ""
 ) => {
   try {
     const offset = page * pageSize;
@@ -22,6 +26,19 @@ export const fetchChecklist = async (
     if (freqFilter) {
       whereClause += ` AND frequency = $${paramIndex++}`;
       params.push(freqFilter);
+    }
+
+    // Role-based filtering
+    const role = userRole?.toLowerCase();
+    if (role === 'admin' && userDept) {
+      whereClause += ` AND LOWER(department) = LOWER($${paramIndex++})`;
+      params.push(userDept);
+    } else if (role === 'div_admin' && userDiv) {
+      whereClause += ` AND LOWER(division) = LOWER($${paramIndex++})`;
+      params.push(userDiv);
+    } else if (role === 'user' && userName) {
+      whereClause += ` AND LOWER(name) = LOWER($${paramIndex++})`;
+      params.push(userName);
     }
 
     // ⭐ DISTINCT ON ensures uniqueness based on (name + task_description)
@@ -71,7 +88,11 @@ export const fetchDelegation = async (
   nameFilter = "",
   freqFilter = "",
   startDate,
-  endDate
+  endDate,
+  userRole = "",
+  userDept = "",
+  userDiv = "",
+  userName = ""
 ) => {
   try {
     const offset = page * pageSize;
@@ -98,6 +119,19 @@ export const fetchDelegation = async (
     if (freqFilter) {
       filters.push(`frequency = $${paramIndex++}`);
       params.push(freqFilter);
+    }
+
+    // Role-based filtering
+    const role = userRole?.toLowerCase();
+    if (role === 'admin' && userDept) {
+      filters.push(`LOWER(department) = LOWER($${paramIndex++})`);
+      params.push(userDept);
+    } else if (role === 'div_admin' && userDiv) {
+      filters.push(`LOWER(division) = LOWER($${paramIndex++})`);
+      params.push(userDiv);
+    } else if (role === 'user' && userName) {
+      filters.push(`LOWER(name) = LOWER($${paramIndex++})`);
+      params.push(userName);
     }
 
     const whereClause = filters.join(" AND ");
