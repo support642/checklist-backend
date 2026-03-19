@@ -7,9 +7,9 @@ import {
     getMaintenanceDropdownOptions,
     getUniqueMaintenanceTasks,
     updateUniqueMaintenanceTask,
-    deleteUniqueMaintenanceTasks
+    deleteUniqueMaintenanceTasks,
+    getMaintenanceUniqueCount
 } from "../controllers/maintenanceController.js";
-
 const router = express.Router();
 
 // GET all pending maintenance tasks
@@ -35,5 +35,8 @@ router.post("/update-unique", updateUniqueMaintenanceTask);
 
 // POST delete unique maintenance tasks (QuickTask View)
 router.post("/delete-unique", deleteUniqueMaintenanceTasks);
+
+// POST get unique maintenance task count
+router.post("/unique-count", getMaintenanceUniqueCount);
 
 export default router;

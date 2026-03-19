@@ -30,9 +30,9 @@ export const fetchChecklist = async (
 
     // Role-based filtering
     const role = userRole?.toLowerCase();
-    if (role === 'admin' && userDept) {
-      whereClause += ` AND LOWER(department) = LOWER($${paramIndex++})`;
-      params.push(userDept);
+    if (role === 'admin' && userDept && userDiv) {
+      whereClause += ` AND LOWER(division) = LOWER($${paramIndex++}) AND LOWER(department) = LOWER($${paramIndex++})`;
+      params.push(userDiv, userDept);
     } else if (role === 'div_admin' && userDiv) {
       whereClause += ` AND LOWER(division) = LOWER($${paramIndex++})`;
       params.push(userDiv);
@@ -45,7 +45,8 @@ export const fetchChecklist = async (
     const dataQuery = `
       SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
         checklist.*,
-        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date
+        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
+        TO_CHAR(planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
       FROM checklist
       WHERE ${whereClause}
       ORDER BY LOWER(name), LOWER(task_description), checklist.task_start_date ASC
@@ -123,7 +124,9 @@ export const fetchDelegation = async (
 
     // Role-based filtering
     const role = userRole?.toLowerCase();
-    if (role === 'admin' && userDept) {
+    if (role === 'admin' && userDept && userDiv) {
+      filters.push(`LOWER(division) = LOWER($${paramIndex++})`);
+      params.push(userDiv);
       filters.push(`LOWER(department) = LOWER($${paramIndex++})`);
       params.push(userDept);
     } else if (role === 'div_admin' && userDiv) {
@@ -139,7 +142,8 @@ export const fetchDelegation = async (
     const dataQuery = `
       SELECT 
         delegation.*,
-        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date
+        TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
+        TO_CHAR(planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
       FROM delegation
       WHERE ${whereClause}
       ORDER BY delegation.task_start_date ASC
@@ -269,5 +273,64 @@ export const fetchUsers = async () => {
   } catch (err) {
     console.log(err);
     return [];
+  }
+};
+
+// ------------------------ GET UNIQUE TASK COUNTS ------------------------
+export const getQuickTaskCounts = async (req, res) => {
+  try {
+    const { userRole, userDept, userDiv, userName } = req.body;
+    const role = userRole?.toLowerCase();
+
+    // BUILD WHERE CLAUSE
+    let whereClause = "submission_date IS NULL";
+    let params = [];
+    let paramIndex = 1;
+
+    if (role === 'admin' && userDept && userDiv) {
+      whereClause += ` AND LOWER(division) = LOWER($${paramIndex++}) AND LOWER(department) = LOWER($${paramIndex++})`;
+      params.push(userDiv, userDept);
+    } else if (role === 'div_admin' && userDiv) {
+      whereClause += ` AND LOWER(division) = LOWER($${paramIndex++})`;
+      params.push(userDiv);
+    } else if (role === 'user' && userName) {
+      whereClause += ` AND LOWER(name) = LOWER($${paramIndex++})`;
+      params.push(userName);
+    }
+
+    const checklistCountQuery = `
+      SELECT COUNT(*) FROM (
+        SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
+          name, task_description
+        FROM checklist
+        WHERE ${whereClause}
+      ) AS unique_tasks
+    `;
+
+    // Delegation count usually has today's date filter if not specified, 
+    // but for QuickTask view it shows all pending.
+    // However, fetchDelegation uses a date filter. I'll match fetchDelegation's default (today).
+    const delegationCountQuery = `
+      SELECT COUNT(*) FROM (
+        SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
+          name, task_description
+        FROM delegation
+        WHERE ${whereClause} AND task_start_date::date = CURRENT_DATE
+      ) AS unique_tasks
+    `;
+
+    const [checklistRes, delegationRes] = await Promise.all([
+      pool.query(checklistCountQuery, params),
+      pool.query(delegationCountQuery, params)
+    ]);
+
+    res.json({
+      checklistCount: parseInt(checklistRes.rows[0]?.count ?? 0, 10),
+      delegationCount: parseInt(delegationRes.rows[0]?.count ?? 0, 10)
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching quick task counts:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };

@@ -107,10 +107,13 @@ export const getDashboardData = async (req, res) => {
     // ---------------------------
     // TASK VIEW FILTERS
     // ---------------------------
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? `${table}.planned_date` : `${table}.task_start_date`;
+
     if (taskView === "recent") {
       // TODAY TASKS
       query += `
-        AND ${table}.task_start_date::date = CURRENT_DATE
+        AND ${dateCol}::date = CURRENT_DATE
       `;
 
       // For checklist: status is enum 'yes'/'no', compare directly
@@ -122,7 +125,7 @@ export const getDashboardData = async (req, res) => {
     else if (taskView === "upcoming") {
       // TOMORROW TASKS - Use the exact query that works in DB
       query += `
-        AND ${table}.task_start_date::date = (CURRENT_DATE + INTERVAL '1 day')::date
+        AND ${dateCol}::date = (CURRENT_DATE + INTERVAL '1 day')::date
       `;
 
       // For checklist: exclude completed tasks
@@ -134,7 +137,7 @@ export const getDashboardData = async (req, res) => {
     else if (taskView === "overdue") {
       // PAST DUE + NOT COMPLETED
       query += `
-        AND ${table}.task_start_date::date < CURRENT_DATE
+        AND ${dateCol}::date < CURRENT_DATE
       `;
 
       if (dashboardType === "checklist") {
@@ -147,8 +150,8 @@ export const getDashboardData = async (req, res) => {
     else if (taskView === "all") {
       // ALL TASKS IN CURRENT MONTH
       query += `
-        AND ${table}.task_start_date >= '${firstDayStr} 00:00:00'
-        AND ${table}.task_start_date <= '${currentDayStr} 23:59:59'
+        AND ${dateCol} >= '${firstDayStr} 00:00:00'
+        AND ${dateCol} <= '${currentDayStr} 23:59:59'
       `;
     }
 
@@ -233,11 +236,14 @@ export const getCompletedTask = async (req, res) => {
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date >= '${firstDayStr} 00:00:00'
-      AND task_start_date <= '${currentDayStr} 23:59:59'
+      WHERE ${dateCol} >= '${firstDayStr} 00:00:00'
+      AND ${dateCol} <= '${currentDayStr} 23:59:59'
     `;
 
     if (dashboardType === "checklist") {
@@ -322,10 +328,13 @@ export const getPendingTask = async (req, res) => {
     const table = dashboardType;
 
     // Align with "recent" list logic: only today's tasks that are not submitted
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date::date = CURRENT_DATE
+      WHERE ${dateCol}::date = CURRENT_DATE
       AND submission_date IS NULL
     `;
 
@@ -374,11 +383,14 @@ export const getNotDoneTask = async (req, res) => {
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date >= '${firstDayStr} 00:00:00'
-      AND task_start_date <= '${currentDayStr} 23:59:59'
+      WHERE ${dateCol} >= '${firstDayStr} 00:00:00'
+      AND ${dateCol} <= '${currentDayStr} 23:59:59'
       AND status = 'no'
       AND submission_date IS NOT NULL
     `;
@@ -428,10 +440,13 @@ export const getOverdueTask = async (req, res) => {
     let idx = 1;
 
     // Align with task list overdue view: before today and not submitted
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date::date < CURRENT_DATE
+      WHERE ${dateCol}::date < CURRENT_DATE
       AND submission_date IS NULL
     `;
 
@@ -744,8 +759,8 @@ export const getStaffTaskSummary = async (req, res) => {
         ) AS completed
       FROM ${table} t
       LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
-      WHERE t.task_start_date >= '${firstDayStr} 00:00:00'
-      AND t.task_start_date <= '${currentDayStr} 23:59:59'
+      WHERE ${dashboardType === "delegation" ? "t.planned_date" : "t.task_start_date"} >= '${firstDayStr} 00:00:00'
+      AND ${dashboardType === "delegation" ? "t.planned_date" : "t.task_start_date"} <= '${currentDayStr} 23:59:59'
     `;
 
     const upRole = req.query.role ? req.query.role.toUpperCase() : "USER";
@@ -843,10 +858,13 @@ export const getDashboardDataCount = async (req, res) => {
       query += ` AND LOWER(name)=LOWER('${username}')`;
     }
 
+    // Use planned_date for delegation, task_start_date for checklist
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     // TASK VIEW LOGIC
     if (taskView === "recent") {
       query += `
-        AND DATE(task_start_date) = CURRENT_DATE
+        AND DATE(${dateCol}) = CURRENT_DATE
       `;
 
       if (dashboardType === "checklist") {
@@ -856,7 +874,7 @@ export const getDashboardDataCount = async (req, res) => {
     }
     else if (taskView === "upcoming") {
       query += `
-        AND DATE(task_start_date) = CURRENT_DATE + INTERVAL '1 day'
+        AND DATE(${dateCol}) = CURRENT_DATE + INTERVAL '1 day'
       `;
 
       if (dashboardType === "checklist") {
@@ -865,7 +883,7 @@ export const getDashboardDataCount = async (req, res) => {
     }
     else if (taskView === "overdue") {
       query += `
-        AND DATE(task_start_date) < CURRENT_DATE
+        AND DATE(${dateCol}) < CURRENT_DATE
         AND submission_date IS NULL
       `;
 

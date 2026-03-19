@@ -28,7 +28,7 @@ export const getPendingMaintenanceTasks = async (req, res) => {
 
         if (upRole === "SUPER_ADMIN") {
             // No additional filter
-        } 
+        }
         else if (upRole === "DIV_ADMIN") {
             if (requesterUnit && requesterDivision) {
                 where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
@@ -135,7 +135,7 @@ export const getMaintenanceHistory = async (req, res) => {
 
         if (upRole === "SUPER_ADMIN") {
             // No additional filter
-        } 
+        }
         else if (upRole === "DIV_ADMIN") {
             if (requesterUnit && requesterDivision) {
                 where += ` AND LOWER(t.unit) = LOWER('${requesterUnit.replace(/'/g, "''")}') AND LOWER(t.division) = LOWER('${requesterDivision.replace(/'/g, "''")}') `;
@@ -400,22 +400,13 @@ export const getUniqueMaintenanceTasks = async (req, res) => {
 
         // Role-based filtering
         const upRole = (userRole || "").toUpperCase();
-        if (upRole === "SUPER_ADMIN") {
-            // No filter
-        } 
-        else if (upRole === "DIV_ADMIN") {
-            if (userDiv) {
-                whereClause += ` AND LOWER(t.division) = LOWER($${paramIndex++})`;
-                params.push(userDiv);
-            }
-        }
-        else if (upRole === "ADMIN") {
-            if (userDept) {
-                whereClause += ` AND LOWER(t.department) = LOWER($${paramIndex++})`;
-                params.push(userDept);
-            }
-        }
-        else if (upRole === "USER" && userName) {
+        if (upRole === "ADMIN" && userDept && userDiv) {
+            whereClause += ` AND LOWER(t.division) = LOWER($${paramIndex++}) AND LOWER(t.department) = LOWER($${paramIndex++})`;
+            params.push(userDiv, userDept);
+        } else if (upRole === "DIV_ADMIN" && userDiv) {
+            whereClause += ` AND LOWER(t.division) = LOWER($${paramIndex++})`;
+            params.push(userDiv);
+        } else if (upRole === "USER" && userName) {
             whereClause += ` AND LOWER(t.name) = LOWER($${paramIndex++})`;
             params.push(userName);
         }
@@ -592,6 +583,48 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Error updating unique maintenance tasks:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+// -----------------------------------------
+// 12️⃣ GET UNIQUE MAINTENANCE TASK COUNT
+// -----------------------------------------
+export const getMaintenanceUniqueCount = async (req, res) => {
+    try {
+        const { userRole, userDept, userDiv, userName } = req.body;
+        const upRole = (userRole || "").toUpperCase();
+
+        const params = [];
+        let paramIndex = 1;
+        let whereClause = "submission_date IS NULL AND DATE(task_start_date) <= CURRENT_DATE + INTERVAL '365 days'";
+
+        if (upRole === "ADMIN" && userDept && userDiv) {
+            whereClause += ` AND LOWER(division) = LOWER($${paramIndex++}) AND LOWER(department) = LOWER($${paramIndex++})`;
+            params.push(userDiv, userDept);
+        } else if (upRole === "DIV_ADMIN" && userDiv) {
+            whereClause += ` AND LOWER(division) = LOWER($${paramIndex++})`;
+            params.push(userDiv);
+        } else if (upRole === "USER" && userName) {
+            whereClause += ` AND LOWER(name) = LOWER($${paramIndex++})`;
+            params.push(userName);
+        }
+
+        const countQuery = `
+          SELECT COUNT(*) FROM (
+            SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
+              name, task_description
+            FROM maintenance_tasks
+            WHERE ${whereClause}
+          ) AS unique_tasks
+        `;
+
+        const countRes = await pool.query(countQuery, params);
+        const total = parseInt(countRes.rows[0]?.count ?? 0, 10);
+
+        res.json({ total });
+
+    } catch (error) {
+        console.error("❌ Error fetching unique maintenance task count:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 };

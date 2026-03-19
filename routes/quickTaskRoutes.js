@@ -5,7 +5,8 @@ import {
   deleteChecklistTasks,
   deleteDelegationTasks,
   updateChecklistTask,
-  fetchUsers
+  fetchUsers,
+  getQuickTaskCounts
 } from "../controllers/quickTaskController.js";
 
 const router = express.Router();
@@ -16,8 +17,6 @@ router.post("/checklist", async (req, res) => {
     req.body.pageSize,
     req.body.nameFilter,
     req.body.freqFilter,
-    req.body.startDate,
-    req.body.endDate,
     req.body.userRole,
     req.body.userDept,
     req.body.userDiv,
@@ -61,5 +60,7 @@ router.get("/users", async (req, res) => {
   const result = await fetchUsers();
   res.json(result);
 });
+
+router.post("/counts", getQuickTaskCounts);
 
 export default router;
