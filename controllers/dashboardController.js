@@ -97,11 +97,11 @@ export const getDashboardData = async (req, res) => {
     }
 
     // Manual overrides from UI (if permitted)
-    if (upRole === "SUPER_ADMIN" || upRole === "super_admin" || upRole === "DIV_ADMIN" || upRole === "div_admin") {
-      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(${table}.name) = LOWER('${staffFilter}')`;
-      if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(${table}.department) = LOWER('${departmentFilter}')`;
-      if (unitFilter && unitFilter !== "all") query += ` AND LOWER(${table}.unit) = LOWER('${unitFilter}')`;
-      if (divisionFilter && divisionFilter !== "all") query += ` AND LOWER(${table}.division) = LOWER('${divisionFilter}')`;
+    if (upRole === "SUPER_ADMIN" || upRole === "super_admin" || upRole === "DIV_ADMIN" || upRole === "div_admin" || upRole === "ADMIN" || upRole === "admin") {
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(${table}.name) = LOWER('${staffFilter.replace(/'/g, "''")}')`;
+      if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(${table}.department) = LOWER('${departmentFilter.replace(/'/g, "''")}')`;
+      if (unitFilter && unitFilter !== "all") query += ` AND LOWER(${table}.unit) = LOWER('${unitFilter.replace(/'/g, "''")}')`;
+      if (divisionFilter && divisionFilter !== "all") query += ` AND LOWER(${table}.division) = LOWER('${divisionFilter.replace(/'/g, "''")}')`;
     }
 
     // ---------------------------
@@ -204,7 +204,14 @@ export const getTotalTask = async (req, res) => {
       if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
       if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
       query += ` AND LOWER(name)=LOWER('${username}')`;
     }
@@ -254,7 +261,14 @@ export const getCompletedTask = async (req, res) => {
       if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
       if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
       query += ` AND LOWER(name)=LOWER('${username}')`;
     }
@@ -330,7 +344,14 @@ export const getPendingTask = async (req, res) => {
       if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
       if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
       query += ` AND LOWER(name)=LOWER('${username}')`;
     }
@@ -377,7 +398,14 @@ export const getNotDoneTask = async (req, res) => {
       if (staffFilter && staffFilter !== "all") query += ` AND name='${staffFilter}'`;
       if (departmentFilter && departmentFilter !== "all") query += ` AND department='${departmentFilter}'`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
       query += ` AND name='${username}'`;
     }
@@ -423,8 +451,18 @@ export const getOverdueTask = async (req, res) => {
       if (staffFilter && staffFilter !== "all") { query += ` AND LOWER(name)=LOWER($${idx++})`; params.push(staffFilter); }
       if (departmentFilter && departmentFilter !== "all") { query += ` AND LOWER(department)=LOWER($${idx++})`; params.push(departmentFilter); }
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department)=LOWER($${idx++})`;
-      params.push(requesterUnit, requesterDivision, requesterDepartment);
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department) = ANY($${idx++})`;
+        params.push(requesterUnit, requesterDivision, depts);
+      } else {
+        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department)=LOWER($${idx++})`;
+        params.push(requesterUnit, requesterDivision, requesterDepartment);
+      }
+      if (staffFilter && staffFilter !== "all") {
+        query += ` AND LOWER(name)=LOWER($${idx++})`;
+        params.push(staffFilter);
+      }
     } else {
       query += ` AND LOWER(name)=LOWER($${idx++})`;
       params.push(username);
@@ -556,8 +594,18 @@ export const getChecklistByDateRange = async (req, res) => {
       if (staffFilter && staffFilter !== "all") { query += ` AND LOWER(checklist.name)=LOWER($${idx++})`; params.push(staffFilter); }
       if (departmentFilter && departmentFilter !== "all") { query += ` AND LOWER(checklist.department)=LOWER($${idx++})`; params.push(departmentFilter); }
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(checklist.unit)=LOWER($${idx++}) AND LOWER(checklist.division)=LOWER($${idx++}) AND LOWER(checklist.department)=LOWER($${idx++})`;
-      params.push(requesterUnit, requesterDivision, requesterDepartment);
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        query += ` AND LOWER(checklist.unit)=LOWER($${idx++}) AND LOWER(checklist.division)=LOWER($${idx++}) AND LOWER(checklist.department) = ANY($${idx++})`;
+        params.push(requesterUnit, requesterDivision, depts);
+      } else {
+        query += ` AND LOWER(checklist.unit)=LOWER($${idx++}) AND LOWER(checklist.division)=LOWER($${idx++}) AND LOWER(checklist.department)=LOWER($${idx++})`;
+        params.push(requesterUnit, requesterDivision, requesterDepartment);
+      }
+      if (staffFilter && staffFilter !== "all") {
+        query += ` AND LOWER(checklist.name)=LOWER($${idx++})`;
+        params.push(staffFilter);
+      }
     } else {
       query += ` AND LOWER(checklist.name)=LOWER($${idx++})`;
       params.push(username);
@@ -633,8 +681,18 @@ export const getChecklistStatsByDate = async (req, res) => {
       if (staffFilter && staffFilter !== "all") { query += ` AND LOWER(name)=LOWER($${idx++})`; params.push(staffFilter); }
       if (departmentFilter && departmentFilter !== "all") { query += ` AND LOWER(department)=LOWER($${idx++})`; params.push(departmentFilter); }
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department)=LOWER($${idx++})`;
-      params.push(requesterUnit, requesterDivision, requesterDepartment);
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department) = ANY($${idx++})`;
+        params.push(requesterUnit, requesterDivision, depts);
+      } else {
+        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department)=LOWER($${idx++})`;
+        params.push(requesterUnit, requesterDivision, requesterDepartment);
+      }
+      if (staffFilter && staffFilter !== "all") {
+        query += ` AND LOWER(name)=LOWER($${idx++})`;
+        params.push(staffFilter);
+      }
     } else {
       query += ` AND LOWER(name)=LOWER($${idx++})`;
       params.push(username);
@@ -701,7 +759,13 @@ export const getStaffTaskSummary = async (req, res) => {
     } else if (upRole === "DIV_ADMIN" || upRole === "div_admin") {
       query += ` AND LOWER(t.unit)=LOWER('${requesterUnit}') AND LOWER(t.division)=LOWER('${requesterDivision}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(t.unit)=LOWER('${requesterUnit}') AND LOWER(t.division)=LOWER('${requesterDivision}') AND LOWER(t.department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(t.unit)=LOWER('${requesterUnit}') AND LOWER(t.division)=LOWER('${requesterDivision}') AND LOWER(t.department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(t.unit)=LOWER('${requesterUnit}') AND LOWER(t.division)=LOWER('${requesterDivision}') AND LOWER(t.department)=LOWER('${requesterDepartment}')`;
+      }
     } else {
       query += ` AND LOWER(t.name)=LOWER('${username}')`;
     }
@@ -767,7 +831,14 @@ export const getDashboardDataCount = async (req, res) => {
       if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
       if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
-      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      if (requesterDepartment && requesterDepartment.includes(',')) {
+        const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
+      } else {
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
+      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
       query += ` AND LOWER(name)=LOWER('${username}')`;
     }
