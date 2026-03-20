@@ -46,7 +46,7 @@ export const fetchChecklist = async (
       SELECT DISTINCT ON (LOWER(name), LOWER(task_description))
         checklist.*,
         TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
-        TO_CHAR(planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
+        TO_CHAR(planned_date::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
       FROM checklist
       WHERE ${whereClause}
       ORDER BY LOWER(name), LOWER(task_description), checklist.task_start_date ASC
@@ -143,7 +143,7 @@ export const fetchDelegation = async (
       SELECT 
         delegation.*,
         TO_CHAR(task_start_date, 'YYYY-MM-DD"T"HH24:MI:SS') as task_start_date,
-        TO_CHAR(planned_date, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
+        TO_CHAR(planned_date::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS') as planned_date
       FROM delegation
       WHERE ${whereClause}
       ORDER BY delegation.task_start_date ASC

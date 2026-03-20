@@ -148,11 +148,21 @@ export const getDashboardData = async (req, res) => {
       }
     }
     else if (taskView === "all") {
-      // ALL TASKS IN CURRENT MONTH
-      query += `
-        AND ${dateCol} >= '${firstDayStr} 00:00:00'
-        AND ${dateCol} <= '${currentDayStr} 23:59:59'
-      `;
+      // ALL TASKS IN CURRENT MONTH (OR COMPLETED DELEGATION TASKS)
+      if (dashboardType === "delegation") {
+        query += `
+          AND (
+            (${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59')
+            OR 
+            (${table}.submission_date IS NOT NULL)
+          )
+        `;
+      } else {
+        query += `
+          AND ${dateCol} >= '${firstDayStr} 00:00:00'
+          AND ${dateCol} <= '${currentDayStr} 23:59:59'
+        `;
+      }
     }
 
     // ORDER + PAGINATION
@@ -185,12 +195,25 @@ export const getTotalTask = async (req, res) => {
     // Get current month range
     const { firstDayStr, currentDayStr } = getCurrentMonthRange();
 
+    const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
+
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE task_start_date >= '${firstDayStr} 00:00:00'
-      AND task_start_date <= '${currentDayStr} 23:59:59'
+      WHERE 
     `;
+
+    if (dashboardType === "delegation") {
+      query += ` 
+        (
+          (${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59')
+          OR 
+          (submission_date IS NOT NULL)
+        )
+      `;
+    } else {
+      query += ` ${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59' `;
+    }
 
     const upRole = role ? role.toUpperCase() : "USER";
     const requesterUnit = req.query.unit;
@@ -242,11 +265,11 @@ export const getCompletedTask = async (req, res) => {
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE ${dateCol} >= '${firstDayStr} 00:00:00'
-      AND ${dateCol} <= '${currentDayStr} 23:59:59'
+      WHERE 1=1
     `;
 
     if (dashboardType === "checklist") {
+      query += ` AND ${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59' `;
       query += ` AND status = 'yes' `;
     } else {
       query += ` AND submission_date IS NOT NULL `;
@@ -759,9 +782,23 @@ export const getStaffTaskSummary = async (req, res) => {
         ) AS completed
       FROM ${table} t
       LEFT JOIN users u ON LOWER(t.name) = LOWER(u.user_name)
-      WHERE ${dashboardType === "delegation" ? "t.planned_date" : "t.task_start_date"} >= '${firstDayStr} 00:00:00'
-      AND ${dashboardType === "delegation" ? "t.planned_date" : "t.task_start_date"} <= '${currentDayStr} 23:59:59'
+      WHERE 
     `;
+
+    if (dashboardType === "delegation") {
+      query += `
+        (
+          (t.planned_date >= '${firstDayStr} 00:00:00' AND t.planned_date <= '${currentDayStr} 23:59:59')
+          OR 
+          (t.submission_date IS NOT NULL)
+        )
+      `;
+    } else {
+      query += `
+        t.task_start_date >= '${firstDayStr} 00:00:00'
+        AND t.task_start_date <= '${currentDayStr} 23:59:59'
+      `;
+    }
 
     const upRole = req.query.role ? req.query.role.toUpperCase() : "USER";
     const username = req.query.username;
