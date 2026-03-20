@@ -27,6 +27,8 @@ export const getStaffTasks = async (req, res) => {
       completedCondition = "LOWER(status) = 'yes'";
     }
 
+    const dateCol = table === "checklist" ? "task_start_date" : "planned_date";
+
     const params = [];
     let paramCount = 1;
 
@@ -40,8 +42,8 @@ export const getStaffTasks = async (req, res) => {
         LEFT JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL
         AND t.name != ''
-        AND t.task_start_date IS NOT NULL
-        AND t.task_start_date <= NOW()
+        AND t.${dateCol} IS NOT NULL
+        AND t.${dateCol} <= NOW()
       `;
     } else {
       staffQuery = `
@@ -50,8 +52,8 @@ export const getStaffTasks = async (req, res) => {
         JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL
         AND t.name != ''
-        AND t.task_start_date IS NOT NULL
-        AND t.task_start_date <= NOW()
+        AND t.${dateCol} IS NOT NULL
+        AND t.${dateCol} <= NOW()
       `;
 
       if (userRole === "DIV_ADMIN" && unit && division) {
@@ -75,14 +77,14 @@ export const getStaffTasks = async (req, res) => {
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-      staffQuery += ` AND t.task_start_date >= $${paramCount} AND t.task_start_date <= $${paramCount + 1}`;
+      staffQuery += ` AND t.${dateCol} >= $${paramCount} AND t.${dateCol} <= $${paramCount + 1}`;
       params.push(startDate, `${endDate} 23:59:59`);
       paramCount += 2;
     }
 
     // Add till-date filter if provided (independent of month filter)
     if (tillDate) {
-      staffQuery += ` AND t.task_start_date <= $${paramCount}`;
+      staffQuery += ` AND t.${dateCol} <= $${paramCount}`;
       params.push(`${tillDate} 23:59:59`);
       paramCount++;
     }
@@ -129,24 +131,24 @@ export const getStaffTasks = async (req, res) => {
           ) AS completed,
           SUM(
              CASE 
-               WHEN submission_date IS NULL AND COALESCE(${completedCondition}, false) = false AND task_start_date::date < CURRENT_DATE
+               WHEN submission_date IS NULL AND COALESCE(${completedCondition}, false) = false AND ${dateCol}::date < CURRENT_DATE
                THEN 1 
                ELSE 0 
              END
           ) AS overdue,
           SUM(
             CASE 
-              WHEN submission_date IS NOT NULL AND submission_date <= task_start_date
+              WHEN submission_date IS NOT NULL AND submission_date <= ${dateCol}
               THEN 1 
-              WHEN submission_date IS NULL AND ${completedCondition} AND task_start_date <= NOW()
+              WHEN submission_date IS NULL AND ${completedCondition} AND ${dateCol} <= NOW()
               THEN 1
               ELSE 0 
             END
           ) AS done_on_time,
           AVG(
             CASE 
-              WHEN submission_date IS NOT NULL AND submission_date > task_start_date
-              THEN EXTRACT(EPOCH FROM (submission_date - task_start_date)) / 86400.0 -- Delay in days
+              WHEN submission_date IS NOT NULL AND submission_date > ${dateCol}
+              THEN EXTRACT(EPOCH FROM (submission_date - ${dateCol})) / 86400.0 -- Delay in days
               ELSE 0
             END
           ) AS avg_delay_days
@@ -165,21 +167,21 @@ export const getStaffTasks = async (req, res) => {
         const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
         const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-        taskQuery += ` AND task_start_date >= $${tc} AND task_start_date <= $${tc + 1}`;
+        taskQuery += ` AND ${dateCol} >= $${tc} AND ${dateCol} <= $${tc + 1}`;
         tp.push(startDate, `${endDate} 23:59:59`);
         tc += 2;
       } else {
-        taskQuery += ` AND task_start_date <= NOW()`;
+        taskQuery += ` AND ${dateCol} <= NOW()`;
       }
 
       // Add till-date filter to task query if provided
       if (tillDate) {
-        taskQuery += ` AND task_start_date <= $${tc}`;
+        taskQuery += ` AND ${dateCol} <= $${tc}`;
         tp.push(`${tillDate} 23:59:59`);
         tc++;
       }
 
-      taskQuery += ` AND task_start_date IS NOT NULL`;
+      taskQuery += ` AND ${dateCol} IS NOT NULL`;
 
       const taskResult = await pool.query(taskQuery, tp);
 
@@ -249,7 +251,7 @@ export const getStaffCount = async (req, res) => {
         LEFT JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL 
         AND t.name != ''
-        AND t.task_start_date::timestamp <= NOW()
+        AND t.${dashboardType === "checklist" ? "task_start_date" : "planned_date"}::timestamp <= NOW()
       `;
     } else {
       query = `
@@ -258,7 +260,7 @@ export const getStaffCount = async (req, res) => {
         JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
         WHERE t.name IS NOT NULL 
         AND t.name != ''
-        AND t.task_start_date::timestamp <= NOW()
+        AND t.${dashboardType === "checklist" ? "task_start_date" : "planned_date"}::timestamp <= NOW()
       `;
 
       if (userRole === "DIV_ADMIN" && unit && division) {
