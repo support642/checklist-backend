@@ -42,6 +42,7 @@ export const getDashboardData = async (req, res) => {
     const remarkCol = dashboardType === 'delegation' ? 'remarks' : 'remark';
     const adminDoneCol = dashboardType === 'delegation' ? "NULL as admin_done" : 'admin_done';
     const adminDoneRemarksCol = dashboardType === 'delegation' ? 'adminremarks as admin_done_remarks' : 'admin_done_remarks';
+    const colorCodeCol = dashboardType === 'delegation' ? 'color_code_for' : 'NULL as color_code_for';
 
     let query = `
       SELECT 
@@ -58,6 +59,7 @@ export const getDashboardData = async (req, res) => {
         image,
         ${adminDoneCol},
         delay,
+        ${colorCodeCol},
         CASE WHEN planned_date IS NOT NULL THEN to_char(planned_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as planned_date,
         CASE WHEN created_at IS NOT NULL THEN to_char(created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as created_at,
         CASE WHEN task_start_date IS NOT NULL THEN to_char(task_start_date::timestamp, 'YYYY-MM-DD HH24:MI:SS') ELSE NULL END as task_start_date,
@@ -204,15 +206,19 @@ export const getTotalTask = async (req, res) => {
     `;
 
     if (dashboardType === "delegation") {
+      // Delegation: All time for summary counts? Or month? 
+      // User's previous state seemed to imply all time or month + completed.
+      // Let's stick to month range for summary cards if not date filtered, OR use the specific logic.
       query += ` 
         (
-          (${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59')
+          (${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}')
           OR 
           (submission_date IS NOT NULL)
         )
       `;
     } else {
-      query += ` ${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59' `;
+      // Checklist: Current month by default
+      query += ` ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
     }
 
     const upRole = role ? role.toUpperCase() : "USER";
@@ -269,10 +275,13 @@ export const getCompletedTask = async (req, res) => {
     `;
 
     if (dashboardType === "checklist") {
-      query += ` AND ${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59' `;
-      query += ` AND status = 'yes' `;
+      query += ` AND ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
+      query += ` AND status = 'yes' AND submission_date IS NOT NULL `;
     } else {
+      // Delegation: Completed tasks (has submission date) 
+      // Should we limit to month too? The current month logic for delegation includes all completed.
       query += ` AND submission_date IS NOT NULL `;
+      query += ` AND (${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' OR submission_date IS NOT NULL)`;
     }
 
     const upRole = role ? role.toUpperCase() : "USER";
@@ -350,6 +359,9 @@ export const getPendingTask = async (req, res) => {
     const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
     const table = dashboardType;
 
+    // Get current month range
+    const { firstDayStr, currentDayStr } = getCurrentMonthRange();
+
     // Align with "recent" list logic: only today's tasks that are not submitted
     // Use planned_date for delegation, task_start_date for checklist
     const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
@@ -357,9 +369,20 @@ export const getPendingTask = async (req, res) => {
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE ${dateCol}::date = CURRENT_DATE
-      AND submission_date IS NULL
+      WHERE submission_date IS NULL
     `;
+
+    if (dashboardType === "checklist") {
+      // Checklist: Pending for CURRENT MONTH (matching table)
+      query += ` 
+        AND ${dateCol}::date >= '${firstDayStr}' 
+        AND ${dateCol}::date <= '${currentDayStr}'
+        AND submission_date IS NULL 
+      `;
+    } else {
+      // Delegation: All pending tasks (no submission date)
+      query += ` AND submission_date IS NULL `;
+    }
 
     const upRole = role ? role.toUpperCase() : "USER";
     const requesterUnit = req.query.unit;
@@ -412,11 +435,19 @@ export const getNotDoneTask = async (req, res) => {
     let query = `
       SELECT COUNT(*) AS count
       FROM ${table}
-      WHERE ${dateCol} >= '${firstDayStr} 00:00:00'
-      AND ${dateCol} <= '${currentDayStr} 23:59:59'
-      AND status = 'no'
-      AND submission_date IS NOT NULL
+      WHERE 1=1
     `;
+
+    if (dashboardType === "delegation") {
+      query += ` AND submission_date IS NOT NULL AND color_code_for = 2 `;
+    } else {
+      query += ` 
+        AND ${dateCol} >= '${firstDayStr} 00:00:00'
+        AND ${dateCol} <= '${currentDayStr} 23:59:59'
+        AND (status = 'no' OR status IS NULL)
+        AND submission_date IS NOT NULL
+      `;
+    }
 
     const upRole = role ? role.toUpperCase() : "USER";
     const requesterUnit = req.query.unit;
@@ -905,7 +936,6 @@ export const getDashboardDataCount = async (req, res) => {
       `;
 
       if (dashboardType === "checklist") {
-        // query += ` AND (status IS NULL OR status <> 'yes')`;
         query += ` AND submission_date IS NULL`;
       }
     }
@@ -925,7 +955,6 @@ export const getDashboardDataCount = async (req, res) => {
       `;
 
       if (dashboardType === "checklist") {
-        // query += ` AND (status IS NULL OR status <> 'yes')`;
         query += ` AND submission_date IS NULL`;
       }
     }
