@@ -125,9 +125,9 @@ export const getDashboardData = async (req, res) => {
       }
     }
     else if (taskView === "upcoming") {
-      // TOMORROW TASKS - Use the exact query that works in DB
+      // FUTURE TASKS
       query += `
-        AND ${dateCol}::date = (CURRENT_DATE + INTERVAL '1 day')::date
+        AND ${dateCol}::date > CURRENT_DATE
       `;
 
       // For checklist: exclude completed tasks
@@ -206,17 +206,17 @@ export const getTotalTask = async (req, res) => {
     `;
 
     if (dashboardType === "delegation") {
-      // Delegation: All time for summary counts? Or month? 
-      // User's previous state seemed to imply all time or month + completed.
-      // Let's stick to month range for summary cards if not date filtered, OR use the specific logic.
+      // Delegation: Include all from start of this month onwards (including future)
+      // PLUS all completed tasks from any time.
       query += ` 
         (
-          (${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}')
+          (${dateCol}::date >= '${firstDayStr}')
           OR 
           (submission_date IS NOT NULL)
         )
       `;
-    } else {
+    }
+ else {
       // Checklist: Current month by default
       query += ` ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
     }
@@ -941,12 +941,9 @@ export const getDashboardDataCount = async (req, res) => {
     }
     else if (taskView === "upcoming") {
       query += `
-        AND DATE(${dateCol}) = CURRENT_DATE + INTERVAL '1 day'
+        AND DATE(${dateCol}) > CURRENT_DATE
+        AND submission_date IS NULL
       `;
-
-      if (dashboardType === "checklist") {
-        query += ` AND submission_date IS NULL`;
-      }
     }
     else if (taskView === "overdue") {
       query += `

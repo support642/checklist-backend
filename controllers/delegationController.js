@@ -77,7 +77,9 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
         d.adminremarks,
         d.department,
         d.unit,
-        d.division
+        d.division,
+        COUNT(*) OVER() AS total_count,
+        SUM(CASE WHEN dd.admin_done = 'Done' THEN 1 ELSE 0 END) OVER() AS approved_count
       FROM delegation_done dd
       LEFT JOIN delegation d ON dd.task_id::BIGINT = d.task_id
     `;
@@ -131,7 +133,15 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
     query += ` ORDER BY dd.created_at DESC;`;
 
     const { rows } = await pool.query(query, params);
-    return res.json(rows);
+    
+    const totalCount = rows.length > 0 ? parseInt(rows[0].total_count) : 0;
+    const approvedCount = rows.length > 0 ? parseInt(rows[0].approved_count) : 0;
+
+    return res.json({
+      data: rows,
+      totalCount,
+      approvedCount
+    });
   } catch (err) {
     console.log("Done fetch error:", err);
     return res.status(400).json({ error: err.message });
