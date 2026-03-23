@@ -13,8 +13,10 @@ import {
   getMachines,
   createMachine,
   updateMachine,
-  deleteMachine
+  deleteMachine,
+  uploadPartImage
 } from "../controllers/settingController.js";
+import upload from "../middleware/s3Upload.js";
 
 const router = express.Router();
 
@@ -36,5 +38,6 @@ router.get("/machines", getMachines);
 router.post("/machines", createMachine);
 router.put("/machines/:id", updateMachine);
 router.delete("/machines/:id", deleteMachine);
+router.post("/upload-part-image", upload.single("image"), uploadPartImage);
 
 export default router;

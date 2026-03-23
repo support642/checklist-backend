@@ -411,12 +411,14 @@ export const createMachine = async (req, res) => {
   try {
     const data = req.body;
 
-    const { machine_name, part_name, machine_area, machine_department, machine_division } = data;
-    // Ensure part_name is an array (backward compatible: wrap string in array)
+    const { machine_name, part_name, part_images, machine_area, machine_department, machine_division } = data;
+    // Ensure part_name and part_images are arrays
     const partNameArray = Array.isArray(part_name) ? part_name : (part_name ? [part_name] : []);
+    const partImagesArray = Array.isArray(part_images) ? part_images : (part_images ? [part_images] : []);
+    
     const result = await pool.query(
-      "INSERT INTO machine_parts (machine_name, part_name, machine_area, machine_department, machine_division) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-      [machine_name || null, partNameArray, machine_area || null, machine_department || null, machine_division || null]
+      "INSERT INTO machine_parts (machine_name, part_name, part_images, machine_area, machine_department, machine_division) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [machine_name || null, partNameArray, partImagesArray, machine_area || null, machine_department || null, machine_division || null]
     );
     res.json(result.rows[0]);
   } catch (error) {
@@ -432,12 +434,14 @@ export const createMachine = async (req, res) => {
 export const updateMachine = async (req, res) => {
   try {
     const { id } = req.params;
-    const { machine_name, part_name, machine_area, machine_department, machine_division } = req.body;
-    // Ensure part_name is an array (backward compatible: wrap string in array)
+    const { machine_name, part_name, part_images, machine_area, machine_department, machine_division } = req.body;
+    // Ensure part_name and part_images are arrays
     const partNameArray = Array.isArray(part_name) ? part_name : (part_name ? [part_name] : []);
+    const partImagesArray = Array.isArray(part_images) ? part_images : (part_images ? [part_images] : []);
+    
     const result = await pool.query(
-      "UPDATE machine_parts SET machine_name = $1, part_name = $2, machine_area = $3, machine_department = $4, machine_division = $5 WHERE id = $6 RETURNING *",
-      [machine_name || null, partNameArray, machine_area || null, machine_department || null, machine_division || null, id]
+      "UPDATE machine_parts SET machine_name = $1, part_name = $2, part_images = $3, machine_area = $4, machine_department = $5, machine_division = $6 WHERE id = $7 RETURNING *",
+      [machine_name || null, partNameArray, partImagesArray, machine_area || null, machine_department || null, machine_division || null, id]
     );
     res.json(result.rows[0]);
   } catch (error) {
@@ -463,3 +467,22 @@ export const deleteMachine = async (req, res) => {
     res.status(500).json({ error: "Database error" });
   }
 };
+
+/*******************************
+ * 14) UPLOAD PART IMAGE
+ *******************************/
+import { uploadToS3 } from "../middleware/s3Upload.js";
+
+export const uploadPartImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file provided" });
+    }
+
+    const imageUrl = await uploadToS3(req.file);
+    res.json({ imageUrl });
+  } catch (error) {
+    console.error("❌ Error uploading part image:", error);
+    res.status(500).json({ error: "Upload failed" });
+  }
+};

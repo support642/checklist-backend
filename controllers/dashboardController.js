@@ -27,7 +27,9 @@ export const getDashboardData = async (req, res) => {
       divisionFilter,
       role,
       username,
-      taskView = "recent"
+      taskView = "recent",
+      startDate,
+      endDate
     } = req.query;
 
     const table = dashboardType;
@@ -151,18 +153,29 @@ export const getDashboardData = async (req, res) => {
     }
     else if (taskView === "all") {
       // ALL TASKS IN CURRENT MONTH (OR COMPLETED DELEGATION TASKS)
+      let start = startDate;
+      let end = endDate;
+
+      if (!start || !end) {
+        start = `${firstDayStr} 00:00:00`;
+        end = `${currentDayStr} 23:59:59`;
+      } else {
+        start = `${start} 00:00:00`;
+        end = `${end} 23:59:59`;
+      }
+
       if (dashboardType === "delegation") {
         query += `
           AND (
-            (${dateCol} >= '${firstDayStr} 00:00:00' AND ${dateCol} <= '${currentDayStr} 23:59:59')
+            (${dateCol} >= '${start}' AND ${dateCol} <= '${end}')
             OR 
             (${table}.submission_date IS NOT NULL)
           )
         `;
       } else {
         query += `
-          AND ${dateCol} >= '${firstDayStr} 00:00:00'
-          AND ${dateCol} <= '${currentDayStr} 23:59:59'
+          AND ${dateCol} >= '${start}'
+          AND ${dateCol} <= '${end}'
         `;
       }
     }
@@ -190,7 +203,17 @@ export const getDashboardData = async (req, res) => {
 
 export const getTotalTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
+    const {
+      dashboardType,
+      staffFilter,
+      departmentFilter,
+      unitFilter,
+      divisionFilter,
+      role,
+      username,
+      startDate,
+      endDate
+    } = req.query;
 
     const table = dashboardType;
 
@@ -208,17 +231,31 @@ export const getTotalTask = async (req, res) => {
     if (dashboardType === "delegation") {
       // Delegation: Include all from start of this month onwards (including future)
       // PLUS all completed tasks from any time.
-      query += ` 
-        (
-          (${dateCol}::date >= '${firstDayStr}')
-          OR 
-          (submission_date IS NOT NULL)
-        )
-      `;
+      if (startDate && endDate) {
+        query += ` 
+          (
+            (${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}')
+            OR 
+            (submission_date IS NOT NULL)
+          )
+        `;
+      } else {
+        query += ` 
+          (
+            (${dateCol}::date >= '${firstDayStr}')
+            OR 
+            (submission_date IS NOT NULL)
+          )
+        `;
+      }
     }
- else {
+    else {
       // Checklist: Current month by default
-      query += ` ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
+      if (startDate && endDate) {
+        query += ` ${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}' `;
+      } else {
+        query += ` ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
+      }
     }
 
     const upRole = role ? role.toUpperCase() : "USER";
@@ -258,7 +295,17 @@ export const getTotalTask = async (req, res) => {
 
 export const getCompletedTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
+    const {
+      dashboardType,
+      staffFilter,
+      departmentFilter,
+      unitFilter,
+      divisionFilter,
+      role,
+      username,
+      startDate,
+      endDate
+    } = req.query;
 
     const table = dashboardType;
 
@@ -275,13 +322,21 @@ export const getCompletedTask = async (req, res) => {
     `;
 
     if (dashboardType === "checklist") {
-      query += ` AND ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
+      if (startDate && endDate) {
+        query += ` AND ${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}' `;
+      } else {
+        query += ` AND ${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' `;
+      }
       query += ` AND status = 'yes' AND submission_date IS NOT NULL `;
     } else {
       // Delegation: Completed tasks (has submission date) 
       // Should we limit to month too? The current month logic for delegation includes all completed.
       query += ` AND submission_date IS NOT NULL `;
-      query += ` AND (${dateCol}::date >= '${firstDayStr}' AND ${dateCol}::date <= '${currentDayStr}' OR submission_date IS NOT NULL)`;
+      
+      let start = startDate || firstDayStr;
+      let end = endDate || currentDayStr;
+      
+      query += ` AND (${dateCol}::date >= '${start}' AND ${dateCol}::date <= '${end}' OR submission_date IS NOT NULL)`;
     }
 
     const upRole = role ? role.toUpperCase() : "USER";
@@ -356,7 +411,17 @@ export const getCompletedTask = async (req, res) => {
 
 export const getPendingTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
+    const {
+      dashboardType,
+      staffFilter,
+      departmentFilter,
+      unitFilter,
+      divisionFilter,
+      role,
+      username,
+      startDate,
+      endDate
+    } = req.query;
     const table = dashboardType;
 
     // Get current month range
@@ -374,9 +439,12 @@ export const getPendingTask = async (req, res) => {
 
     if (dashboardType === "checklist") {
       // Checklist: Pending for CURRENT MONTH (matching table)
+      let start = startDate || firstDayStr;
+      let end = endDate || currentDayStr;
+
       query += ` 
-        AND ${dateCol}::date >= '${firstDayStr}' 
-        AND ${dateCol}::date <= '${currentDayStr}'
+        AND ${dateCol}::date >= '${start}' 
+        AND ${dateCol}::date <= '${end}'
         AND submission_date IS NULL 
       `;
     } else {
@@ -423,7 +491,17 @@ export const getPendingTask = async (req, res) => {
 
 export const getNotDoneTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
+    const {
+      dashboardType,
+      staffFilter,
+      departmentFilter,
+      unitFilter,
+      divisionFilter,
+      role,
+      username,
+      startDate,
+      endDate
+    } = req.query;
     const table = dashboardType;
 
     // Get current month range
@@ -441,9 +519,12 @@ export const getNotDoneTask = async (req, res) => {
     if (dashboardType === "delegation") {
       query += ` AND submission_date IS NOT NULL AND color_code_for = 2 `;
     } else {
+      let start = startDate || firstDayStr;
+      let end = endDate || currentDayStr;
+
       query += ` 
-        AND ${dateCol} >= '${firstDayStr} 00:00:00'
-        AND ${dateCol} <= '${currentDayStr} 23:59:59'
+        AND ${dateCol} >= '${start} 00:00:00'
+        AND ${dateCol} <= '${end} 23:59:59'
         AND (status = 'no' OR status IS NULL)
         AND submission_date IS NOT NULL
       `;
@@ -487,7 +568,17 @@ export const getNotDoneTask = async (req, res) => {
 
 export const getOverdueTask = async (req, res) => {
   try {
-    const { dashboardType, staffFilter, departmentFilter, unitFilter, divisionFilter, role, username } = req.query;
+    const {
+      dashboardType,
+      staffFilter,
+      departmentFilter,
+      unitFilter,
+      divisionFilter,
+      role,
+      username,
+      startDate,
+      endDate
+    } = req.query;
 
     const table = dashboardType;
     const params = [];
@@ -497,12 +588,24 @@ export const getOverdueTask = async (req, res) => {
     // Use planned_date for delegation, task_start_date for checklist
     const dateCol = dashboardType === "delegation" ? "planned_date" : "task_start_date";
 
-    let query = `
-      SELECT COUNT(*) AS count
-      FROM ${table}
-      WHERE ${dateCol}::date < CURRENT_DATE
-      AND submission_date IS NULL
-    `;
+    let query = "";
+    if (startDate && endDate) {
+      query = `
+        SELECT COUNT(*) AS count
+        FROM ${table}
+        WHERE ${dateCol}::date >= '${startDate}'
+        AND ${dateCol}::date <= '${endDate}'
+        AND submission_date IS NULL
+        AND ${dateCol}::date < CURRENT_DATE
+      `;
+    } else {
+      query = `
+        SELECT COUNT(*) AS count
+        FROM ${table}
+        WHERE ${dateCol}::date < CURRENT_DATE
+        AND submission_date IS NULL
+      `;
+    }
 
     const upRole = role ? role.toUpperCase() : "USER";
     const requesterUnit = req.query.unit;
@@ -510,34 +613,28 @@ export const getOverdueTask = async (req, res) => {
     const requesterDepartment = req.query.department;
 
     if (upRole === "SUPER_ADMIN" || upRole === "super_admin") {
-      if (staffFilter && staffFilter !== "all") { query += ` AND LOWER(name)=LOWER($${idx++})`; params.push(staffFilter); }
-      if (departmentFilter && departmentFilter !== "all") { query += ` AND LOWER(department)=LOWER($${idx++})`; params.push(departmentFilter); }
-      if (unitFilter && unitFilter !== "all") { query += ` AND LOWER(unit)=LOWER($${idx++})`; params.push(unitFilter); }
-      if (divisionFilter && divisionFilter !== "all") { query += ` AND LOWER(division)=LOWER($${idx++})`; params.push(divisionFilter); }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+      if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
+      if (unitFilter && unitFilter !== "all") query += ` AND LOWER(unit)=LOWER('${unitFilter}')`;
+      if (divisionFilter && divisionFilter !== "all") query += ` AND LOWER(division)=LOWER('${divisionFilter}')`;
     } else if (upRole === "DIV_ADMIN" || upRole === "div_admin") {
-      query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++})`;
-      params.push(requesterUnit, requesterDivision);
-      if (staffFilter && staffFilter !== "all") { query += ` AND LOWER(name)=LOWER($${idx++})`; params.push(staffFilter); }
-      if (departmentFilter && departmentFilter !== "all") { query += ` AND LOWER(department)=LOWER($${idx++})`; params.push(departmentFilter); }
+      query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}')`;
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter}')`;
+      if (departmentFilter && departmentFilter !== "all") query += ` AND LOWER(department)=LOWER('${departmentFilter}')`;
     } else if (upRole === "ADMIN" || upRole === "admin") {
       if (requesterDepartment && requesterDepartment.includes(',')) {
         const depts = requesterDepartment.split(',').map(d => d.trim().toLowerCase());
-        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department) = ANY($${idx++})`;
-        params.push(requesterUnit, requesterDivision, depts);
+        const deptList = depts.map(d => `'${d.replace(/'/g, "''")}'`).join(',');
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department) IN (${deptList})`;
       } else {
-        query += ` AND LOWER(unit)=LOWER($${idx++}) AND LOWER(division)=LOWER($${idx++}) AND LOWER(department)=LOWER($${idx++})`;
-        params.push(requesterUnit, requesterDivision, requesterDepartment);
+        query += ` AND LOWER(unit)=LOWER('${requesterUnit}') AND LOWER(division)=LOWER('${requesterDivision}') AND LOWER(department)=LOWER('${requesterDepartment}')`;
       }
-      if (staffFilter && staffFilter !== "all") {
-        query += ` AND LOWER(name)=LOWER($${idx++})`;
-        params.push(staffFilter);
-      }
+      if (staffFilter && staffFilter !== "all") query += ` AND LOWER(name)=LOWER('${staffFilter.replace(/'/g, "''")}')`;
     } else {
-      query += ` AND LOWER(name)=LOWER($${idx++})`;
-      params.push(username);
+      query += ` AND LOWER(name)=LOWER('${username}')`;
     }
 
-    const result = await pool.query(query, params);
+    const result = await pool.query(query);
     res.json(Number(result.rows[0].count));
 
   } catch (err) {
@@ -793,7 +890,11 @@ export const getChecklistStatsByDate = async (req, res) => {
 
 export const getStaffTaskSummary = async (req, res) => {
   try {
-    const { dashboardType } = req.query;
+    const {
+      dashboardType,
+      startDate,
+      endDate
+    } = req.query;
     const table = dashboardType;
 
     // Get current month range
@@ -817,17 +918,23 @@ export const getStaffTaskSummary = async (req, res) => {
     `;
 
     if (dashboardType === "delegation") {
+      let start = startDate ? `${startDate} 00:00:00` : `${firstDayStr} 00:00:00`;
+      let end = endDate ? `${endDate} 23:59:59` : `${currentDayStr} 23:59:59`;
+
       query += `
         (
-          (t.planned_date >= '${firstDayStr} 00:00:00' AND t.planned_date <= '${currentDayStr} 23:59:59')
+          (t.planned_date >= '${start}' AND t.planned_date <= '${end}')
           OR 
           (t.submission_date IS NOT NULL)
         )
       `;
     } else {
+      let start = startDate ? `${startDate} 00:00:00` : `${firstDayStr} 00:00:00`;
+      let end = endDate ? `${endDate} 23:59:59` : `${currentDayStr} 23:59:59`;
+
       query += `
-        t.task_start_date >= '${firstDayStr} 00:00:00'
-        AND t.task_start_date <= '${currentDayStr} 23:59:59'
+        t.task_start_date >= '${start}'
+        AND t.task_start_date <= '${end}'
       `;
     }
 
@@ -886,11 +993,12 @@ export const getDashboardDataCount = async (req, res) => {
       taskView = "recent",
       departmentFilter = "all",
       unitFilter = "all",
-      divisionFilter = "all"
+      divisionFilter = "all",
+      role,
+      username,
+      startDate,
+      endDate
     } = req.query;
-
-    const role = req.query.role;
-    const username = req.query.username;
 
     // Base query (no month cap) so it matches list view filters exactly
     let query = `
@@ -933,11 +1041,8 @@ export const getDashboardDataCount = async (req, res) => {
     if (taskView === "recent") {
       query += `
         AND DATE(${dateCol}) = CURRENT_DATE
+        AND submission_date IS NULL
       `;
-
-      if (dashboardType === "checklist") {
-        query += ` AND submission_date IS NULL`;
-      }
     }
     else if (taskView === "upcoming") {
       query += `
@@ -946,10 +1051,19 @@ export const getDashboardDataCount = async (req, res) => {
       `;
     }
     else if (taskView === "overdue") {
-      query += `
-        AND DATE(${dateCol}) < CURRENT_DATE
-        AND submission_date IS NULL
-      `;
+      if (startDate && endDate) {
+        query += `
+          AND DATE(${dateCol}) >= '${startDate}'
+          AND DATE(${dateCol}) <= '${endDate}'
+          AND submission_date IS NULL
+          AND DATE(${dateCol}) < CURRENT_DATE
+        `;
+      } else {
+        query += `
+          AND DATE(${dateCol}) < CURRENT_DATE
+          AND submission_date IS NULL
+        `;
+      }
 
       if (dashboardType === "checklist") {
         query += ` AND submission_date IS NULL`;

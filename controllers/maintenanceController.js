@@ -12,6 +12,8 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         const role = req.query.role;
         const department = req.query.department;
         const search = req.query.search || "";
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
 
         const limit = 50;
         const offset = (page - 1) * limit;
@@ -21,6 +23,10 @@ export const getPendingMaintenanceTasks = async (req, res) => {
       t.submission_date IS NULL
       AND DATE(t.task_start_date) <= CURRENT_DATE + INTERVAL '365 days'
     `;
+
+        if (startDate && endDate) {
+            where += ` AND t.task_start_date >= '${startDate}' AND t.task_start_date <= '${endDate} 23:59:59' `;
+        }
 
         const requesterUnit = req.query.unit;
         const requesterDivision = req.query.division;
@@ -123,11 +129,17 @@ export const getMaintenanceHistory = async (req, res) => {
         const role = req.query.role;
         const department = req.query.department;
         const search = req.query.search;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
 
         const limit = 50;
         const offset = (page - 1) * limit;
 
         let where = `t.submission_date IS NOT NULL`;
+
+        if (startDate && endDate) {
+            where += ` AND t.submission_date >= '${startDate}' AND t.submission_date <= '${endDate} 23:59:59' `;
+        }
 
         const requesterUnit = req.query.unit;
         const requesterDivision = req.query.division;

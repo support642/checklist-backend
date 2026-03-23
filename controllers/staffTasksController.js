@@ -13,7 +13,9 @@ export const getStaffTasks = async (req, res) => {
       username = "",
       unit = "",
       division = "",
-      department = ""
+      department = "",
+      startDate: queryStartDate = "",
+      endDate: queryEndDate = ""
     } = req.query;
 
     const table = dashboardType;
@@ -81,12 +83,18 @@ export const getStaffTasks = async (req, res) => {
       params.push(startDate, `${endDate} 23:59:59`);
       paramCount += 2;
     }
-
     // Add till-date filter if provided (independent of month filter)
     if (tillDate) {
       staffQuery += ` AND t.${dateCol} <= $${paramCount}`;
       params.push(`${tillDate} 23:59:59`);
       paramCount++;
+    }
+
+    // Add global date range filter if provided
+    if (queryStartDate && queryEndDate) {
+      staffQuery += ` AND t.${dateCol} >= $${paramCount} AND t.${dateCol} <= $${paramCount + 1}`;
+      params.push(queryStartDate, `${queryEndDate} 23:59:59`);
+      paramCount += 2;
     }
 
     if (staffFilter !== "all") {
@@ -181,6 +189,13 @@ export const getStaffTasks = async (req, res) => {
         tc++;
       }
 
+      // Add global date range filter to task query if provided
+      if (queryStartDate && queryEndDate) {
+        taskQuery += ` AND ${dateCol} >= $${tc} AND ${dateCol} <= $${tc + 1}`;
+        tp.push(queryStartDate, `${queryEndDate} 23:59:59`);
+        tc += 2;
+      }
+
       taskQuery += ` AND ${dateCol} IS NOT NULL`;
 
       const taskResult = await pool.query(taskQuery, tp);
@@ -219,6 +234,95 @@ export const getStaffTasks = async (req, res) => {
 
   } catch (err) {
     console.error("🔥 REAL ERROR →", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getStaffDetails = async (req, res) => {
+  try {
+    const {
+      dashboardType = "checklist",
+      staffName,
+      monthYear = "",
+      tillDate = "",
+      role = "",
+      username = "",
+      unit = "",
+      division = "",
+      department = "",
+      startDate: queryStartDate = "",
+      endDate: queryEndDate = ""
+    } = req.query;
+
+    if (!staffName) {
+      return res.status(400).json({ error: "staffName is required" });
+    }
+
+    const table = dashboardType;
+    const dateCol = table === "checklist" ? "task_start_date" : "planned_date";
+    const userRole = (role || "").toUpperCase();
+
+    let query = `
+      SELECT 
+        t.status,
+        t.given_by,
+        t.task_description,
+        u.division,
+        u.department,
+        t.name,
+        CASE WHEN t.task_start_date IS NOT NULL THEN to_char(t.task_start_date::timestamp, 'YYYY-MM-DD') ELSE '—' END as start_date,
+        CASE WHEN t.created_at IS NOT NULL THEN to_char(t.created_at::timestamp, 'YYYY-MM-DD') ELSE '—' END as end_date,
+        CASE WHEN t.submission_date IS NOT NULL THEN to_char(t.submission_date::timestamp, 'YYYY-MM-DD') ELSE '—' END as submission_date
+      FROM ${table} t
+      LEFT JOIN users u ON TRIM(LOWER(t.name)) = TRIM(LOWER(u.user_name))
+      WHERE LOWER(t.name) = LOWER($1)
+    `;
+
+    const params = [staffName];
+    let paramCount = 2;
+
+    // Exclude upcoming tasks (tasks after today or tillDate)
+    const effectiveTillDate = tillDate ? tillDate : new Date().toISOString().split('T')[0];
+    query += ` AND t.${dateCol}::date <= $${paramCount}::date`;
+    params.push(effectiveTillDate);
+    paramCount++;
+
+    // Add global date range filter if provided
+    if (queryStartDate && queryEndDate) {
+      query += ` AND t.${dateCol} >= $${paramCount} AND t.${dateCol} <= $${paramCount + 1}`;
+      params.push(queryStartDate, `${queryEndDate} 23:59:59`);
+      paramCount += 2;
+    }
+
+    // Role-based restrictions (similar to getStaffTasks but focused on the selected user)
+    if (userRole === "DIV_ADMIN" && unit && division) {
+      query += ` AND LOWER(u.unit) = LOWER($${paramCount}) AND LOWER(u.division) = LOWER($${paramCount + 1})`;
+      params.push(unit, division);
+      paramCount += 2;
+    } else if (userRole === "ADMIN" && unit && division && department) {
+      query += ` AND LOWER(u.unit) = LOWER($${paramCount}) AND LOWER(u.division) = LOWER($${paramCount + 1}) AND LOWER(u.department) = LOWER($${paramCount + 2})`;
+      params.push(unit, division, department);
+      paramCount += 3;
+    }
+
+    // Month-year filter
+    if (monthYear) {
+      const [year, month] = monthYear.split('-').map(Number);
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      query += ` AND t.${dateCol} >= $${paramCount} AND t.${dateCol} <= $${paramCount + 1}`;
+      params.push(startDate, `${endDate} 23:59:59`);
+      paramCount += 2;
+    }
+
+    query += ` ORDER BY t.${dateCol} DESC, t.submission_date DESC NULLS LAST`;
+
+    const result = await pool.query(query, params);
+    return res.json(result.rows);
+
+  } catch (err) {
+    console.error("Error in getStaffDetails:", err);
     res.status(500).json({ error: err.message });
   }
 };

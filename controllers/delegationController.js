@@ -20,15 +20,22 @@ export const fetchDelegationDataSortByDate = async (req, res) => {
     const requesterUnit = req.query.unit || "";
     const requesterDivision = req.query.division || "";
     const requesterDepartment = req.query.department || "";
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+
+    let dateFilter = "";
+    if (startDate && endDate) {
+      dateFilter = ` AND task_start_date >= '${startDate}' AND task_start_date <= '${endDate} 23:59:59' `;
+    }
 
     if (upRole === "SUPER_ADMIN") {
-      query = `SELECT * FROM delegation WHERE (status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL) ORDER BY task_start_date ASC;`;
+      query = `SELECT * FROM delegation WHERE ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL))${dateFilter} ORDER BY task_start_date ASC;`;
     } else if (upRole === "DIV_ADMIN") {
-      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
+      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL))${dateFilter} ORDER BY task_start_date ASC;`;
     } else if (upRole === "ADMIN") {
-      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND LOWER(department)=LOWER($3) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
+      query = `SELECT * FROM delegation WHERE LOWER(unit)=LOWER($1) AND LOWER(division)=LOWER($2) AND LOWER(department)=LOWER($3) AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL))${dateFilter} ORDER BY task_start_date ASC;`;
     } else {
-      query = `SELECT * FROM delegation WHERE name = $1 AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL)) ORDER BY task_start_date ASC;`;
+      query = `SELECT * FROM delegation WHERE name = $1 AND ((status IS NULL OR status = '' OR status = 'extend' OR status = 'pending') OR (planned_date IS NOT NULL AND submission_date IS NULL))${dateFilter} ORDER BY task_start_date ASC;`;
     }
 
     let params_val = [];
@@ -110,6 +117,13 @@ export const fetchDelegation_DoneDataSortByDate = async (req, res) => {
     } else {
       whereConditions.push(`dd.name = $${paramIndex++}`);
       params.push(username);
+    }
+
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+    if (startDate && endDate) {
+      whereConditions.push(`dd.created_at >= $${paramIndex++} AND dd.created_at <= $${paramIndex++}`);
+      params.push(startDate, `${endDate} 23:59:59`);
     }
 
     if (search) {
