@@ -301,27 +301,75 @@ export const updateChecklist = async (req, res) => {
         // ---------------------------------
         // 🔥🔥 FIX: IMAGE HANDLING
         // ---------------------------------
-        let finalImageUrl = null;
+        let finalImageUrls = [];
 
-        if (item.image && typeof item.image === "string") {
-          if (item.image.startsWith("data:image")) {
-            // Base64 → Buffer
-            const base64Data = item.image.split(";base64,").pop();
-            const buffer = Buffer.from(base64Data, "base64");
+        // Handle array of images
+        if (item.images && Array.isArray(item.images)) {
+          for (const imageStr of item.images) {
+            if (typeof imageStr === "string") {
+              if (imageStr.startsWith("data:")) {
+                const matches = imageStr.match(/^data:([a-zA-Z0-9-+\/.]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                  const mimeType = matches[1];
+                  const base64Data = matches[2];
+                  const buffer = Buffer.from(base64Data, "base64");
 
-            const fakeFile = {
-              originalname: `task_${item.taskId}_${Date.now()}.jpg`,
-              buffer,
-              mimetype: "image/jpeg",
-            };
+                  let extension = mimeType.split('/')[1] || "bin";
+                  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) extension = "jpg";
+                  else if (mimeType.includes("pdf")) extension = "pdf";
+                  else if (mimeType.includes("word") || mimeType.includes("document")) extension = "docx";
+                  else if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) extension = "xlsx";
+                  else if (mimeType.includes("csv")) extension = "csv";
 
-            // Upload to S3
-            finalImageUrl = await uploadToS3(fakeFile);
+                  const fakeFile = {
+                    originalname: `task_${item.taskId}_${Date.now()}_${Math.floor(Math.random() * 1000)}.${extension}`,
+                    buffer,
+                    mimetype: mimeType,
+                  };
+
+                  const s3Url = await uploadToS3(fakeFile);
+                  if (s3Url) finalImageUrls.push(s3Url);
+                } else {
+                  finalImageUrls.push(imageStr);
+                }
+              } else {
+                finalImageUrls.push(imageStr);
+              }
+            }
+          }
+        } else if (item.image && typeof item.image === "string") {
+          // Legacy generic fallback if sending a single image string
+          if (item.image.startsWith("data:")) {
+            const matches = item.image.match(/^data:([a-zA-Z0-9-+\/.]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+              const mimeType = matches[1];
+              const base64Data = matches[2];
+              const buffer = Buffer.from(base64Data, "base64");
+
+              let extension = mimeType.split('/')[1] || "bin";
+              if (mimeType.includes("jpeg") || mimeType.includes("jpg")) extension = "jpg";
+              else if (mimeType.includes("pdf")) extension = "pdf";
+              else if (mimeType.includes("word") || mimeType.includes("document")) extension = "docx";
+              else if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) extension = "xlsx";
+              else if (mimeType.includes("csv")) extension = "csv";
+
+              const fakeFile = {
+                originalname: `task_${item.taskId}_${Date.now()}.${extension}`,
+                buffer,
+                mimetype: mimeType,
+              };
+
+              const s3Url = await uploadToS3(fakeFile);
+              if (s3Url) finalImageUrls.push(s3Url);
+            } else {
+              finalImageUrls.push(item.image);
+            }
           } else {
-            // Already S3 URL or old string
-            finalImageUrl = item.image;
+            finalImageUrls.push(item.image);
           }
         }
+        
+        const finalImageUrl = finalImageUrls.length > 0 ? finalImageUrls.join(',') : null;
 
         // ---------------------------------
         // 🔥 SAVE TO DATABASE
