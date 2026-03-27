@@ -87,6 +87,7 @@ export const getPendingMaintenanceTasks = async (req, res) => {
         t.remarks as remark,
         t.uploaded_image_url as image,
         t.admin_done,
+        t.admin_remark,
         COALESCE(mp.machine_name, t.machine_name) as machine_name,
         COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', ')) as part_name,
         COALESCE(mp.machine_area, t.part_area) as part_area,
@@ -203,6 +204,7 @@ export const getMaintenanceHistory = async (req, res) => {
         t.remarks as remark,
         t.uploaded_image_url as image,
         t.admin_done,
+        t.admin_remark,
         COALESCE(mp.machine_name, t.machine_name) as machine_name,
         COALESCE(array_to_string(t.part_name, ', '), array_to_string(mp.part_name, ', ')) as part_name,
         COALESCE(mp.machine_area, t.part_area) as part_area,
@@ -379,13 +381,14 @@ export const adminDoneMaintenance = async (req, res) => {
 
         const sql = `
       UPDATE maintenance_tasks
-      SET admin_done = 'true'
+      SET admin_done = 'true',
+          admin_remark = $2
       WHERE id = $1
     `;
 
         for (const item of items) {
             // item must have task_id
-            await client.query(sql, [item.task_id]);
+            await client.query(sql, [item.task_id, item.remarks || ""]);
         }
 
         await client.query("COMMIT");
