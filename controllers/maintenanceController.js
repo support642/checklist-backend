@@ -584,6 +584,11 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             return res.status(400).json({ error: "Missing task data" });
         }
 
+        // Convert part_name to array if it's a comma-separated string (column is TEXT[])
+        const partNameArray = typeof updatedTask.part_name === 'string'
+            ? updatedTask.part_name.split(',').map(p => p.trim()).filter(Boolean)
+            : (Array.isArray(updatedTask.part_name) ? updatedTask.part_name : []);
+
         const query = `
           UPDATE maintenance_tasks
           SET
@@ -597,7 +602,7 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             require_attachment = $8,
             machine_name = $9,
             part_name = $10,
-            machine_area = $11,
+            part_area = $11,
             duration = $12,
             status = $13,
             machine_department = $14,
@@ -619,7 +624,7 @@ export const updateUniqueMaintenanceTask = async (req, res) => {
             updatedTask.enable_reminder,  // The frontend passes enable_reminder
             updatedTask.require_attachment,
             updatedTask.machine_name,     // specific to maintenance task edits
-            updatedTask.part_name,
+            partNameArray,
             updatedTask.part_area,
             updatedTask.duration,
             updatedTask.status || originalTask.status, // Fallback if status is empty string from "Select Status" option
